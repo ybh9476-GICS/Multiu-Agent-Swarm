@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="70" height="70" viewBox="0 0 70 70">
+  <g>
+    <rect x="1" y="1" width="68" height="68" rx="14" ry="14" fill="#57B96A" fill-opacity="0.3"/>
+    <g transform="translate(17, 17)">
+      <g transform="translate(1, 1)">
+        <path d="M30.63 16.04C30.63 24.13 25.03 31.7 17.5 33.54C9.98 31.7 4.37 24.13 4.37 16.04L4.37 7.29L17.5 1.46L30.62 7.29L30.63 16.04ZM17.5 30.62C22.97 29.16 27.71 22.66 27.71 16.36L27.71 9.19L17.5 4.64L7.29 9.19L7.29 16.36C7.29 22.66 12.03 29.16 17.5 30.63M14.59 24.79L8.75 18.96L10.81 16.9L14.59 20.67L24.19 11.05L26.25 13.13" fill="#57B96A"/>
+      </g>
+    </g>
+  </g>
+</svg>

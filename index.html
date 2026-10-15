@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="슈퍼바이저와 품질·설비·안전·생산·에너지·물류 에이전트의 연결 구조 시안" />
+    <title>Multi-Agent Swarm · Supervisor Graph</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./graph.js"></script>
+  </head>
+  <body>
+    <main class="graph-canvas" aria-label="에이전트 연결 구조 시안">
+      <h1 class="visually-hidden">Multi-Agent Swarm Orchestrator and Supervisor Graph</h1>
+      <svg class="graph-resource" viewBox="-232 102 1920 1080" xmlns="http://www.w3.org/2000/svg" role="group" aria-labelledby="graph-title graph-description">
+        <title id="graph-title">슈퍼바이저와 6개 전문 에이전트</title>
+        <desc id="graph-description">중앙 슈퍼바이저와 품질·설비·안전·생산·에너지·물류 에이전트가 모두 연결된 목업입니다. 여섯 에이전트의 정보가 밝은 점선을 따라 슈퍼바이저로 이동합니다. 마우스 휠로 확대·축소하고 빈 곳을 드래그해 화면을 이동할 수 있습니다. 실제 연결 상태를 나타내는 화면은 아닙니다.</desc>
+        <g class="connections">
+          <g data-connection="quality" data-connected="true">
+            <path d="M 517 505 C 658 505 517 619 658 619" stroke-dasharray="4 8" />
+          </g>
+          <g data-connection="equipment" data-connected="true">
+            <path d="M 517 642 C 658 642 517 642 658 642" stroke-dasharray="4 8" />
+          </g>
+          <g data-connection="safety" data-connected="true">
+            <path d="M 517 779 C 658 779 517 665 658 665" stroke-dasharray="4 8" />
+          </g>
+          <g data-connection="production" data-connected="true">
+            <path d="M 939 505 C 798 505 939 619 798 619" stroke-dasharray="4 8" />
+          </g>
+          <g data-connection="energy" data-connected="true">
+            <path d="M 939 642 C 798 642 939 642 798 642" stroke-dasharray="4 8" />
+          </g>
+          <g data-connection="logistics" data-connected="true">
+            <path d="M 939 779 C 798 779 939 665 798 665" stroke-dasharray="4 8" />
+          </g>
+        </g>
+        <g data-agent="quality" transform="translate(448 470)" data-selected="false">
+          <title>품질</title>
+          <image href="./assets/quality.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#2CB4A8" />
+        </g>
+        <g data-agent="supervisor" transform="translate(657 571)" data-selected="false">
+          <title>슈퍼바이저</title>
+          <image href="./assets/supervisor.svg" width="142" height="142" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="140" height="140" rx="14" ry="14" stroke="#9A69C7" />
+        </g>
+        <g data-agent="production" transform="translate(938 470)" data-selected="false">
+          <title>생산</title>
+          <image href="./assets/production.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#4D84C7" />
+        </g>
+        <g data-agent="equipment" transform="translate(448 607)" data-selected="false">
+          <title>설비</title>
+          <image href="./assets/equipment.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#C87945" />
+        </g>
+        <g data-agent="safety" transform="translate(448 744)" data-selected="false">
+          <title>안전</title>
+          <image href="./assets/safety.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#57B96A" />
+        </g>
+        <g data-agent="energy" transform="translate(938 607)" data-selected="false">
+          <title>에너지</title>
+          <image href="./assets/energy.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#B9BD3E" />
+        </g>
+        <g data-agent="logistics" transform="translate(938 744)" data-selected="false">
+          <title>물류</title>
+          <image href="./assets/logistics.svg" width="70" height="70" overflow="visible" />
+          <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#C55F91" />
+        </g>
+        <g class="nodes">
+          <g data-nodes="quality" data-connected="true">
+            <circle cx="517" cy="505" r="3" />
+            <circle cx="658" cy="619" r="3" />
+          </g>
+          <g data-nodes="equipment" data-connected="true">
+            <circle cx="517" cy="642" r="3" />
+            <circle cx="658" cy="642" r="3" />
+          </g>
+          <g data-nodes="safety" data-connected="true">
+            <circle cx="517" cy="779" r="3" />
+            <circle cx="658" cy="665" r="3" />
+          </g>
+          <g data-nodes="production" data-connected="true">
+            <circle cx="939" cy="505" r="3" />
+            <circle cx="798" cy="619" r="3" />
+          </g>
+          <g data-nodes="energy" data-connected="true">
+            <circle cx="939" cy="642" r="3" />
+            <circle cx="798" cy="642" r="3" />
+          </g>
+          <g data-nodes="logistics" data-connected="true">
+            <circle cx="939" cy="779" r="3" />
+            <circle cx="798" cy="665" r="3" />
+          </g>
+        </g>
+      </svg>
+      <div class="tile-controls" role="group" aria-label="에이전트 선택">
+        <button class="tile-hit" type="button" data-tile-control="quality" aria-label="품질 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="supervisor" aria-label="슈퍼바이저 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="production" aria-label="생산 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="equipment" aria-label="설비 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="safety" aria-label="안전 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="energy" aria-label="에너지 에이전트 타일" aria-pressed="false"></button>
+        <button class="tile-hit" type="button" data-tile-control="logistics" aria-label="물류 에이전트 타일" aria-pressed="false"></button>
+      </div>
+    </main>
+  </body>
+</html>

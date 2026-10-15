@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="70" height="70" viewBox="0 0 70 70">
+  <g>
+    <rect x="1" y="1" width="68" height="68" rx="14" ry="14" fill="#B9BD3E" fill-opacity="0.3"/>
+    <g transform="translate(17, 17)">
+      <g transform="translate(9, 0)">
+        <path d="M8.33 14.25L8.33 16.82L14.6 16.82L11.67 22.75L11.67 20.18L5.4 20.18L8.33 14.25ZM11.67 0L0 23.55L8.33 23.55L8.33 37L20 13.46L11.67 13.46L11.67 0Z" fill="#B9BD3E"/>
+      </g>
+    </g>
+  </g>
+</svg>
