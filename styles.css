@@ -90,8 +90,12 @@ body {
   border: 0;
   outline: none;
   background: transparent;
-  cursor: pointer;
+  cursor: grab;
   pointer-events: auto;
+}
+
+.tile-hit.is-dragging {
+  cursor: grabbing;
 }
 
 .tile-controls {

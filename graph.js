@@ -1,13 +1,63 @@
 // Artwork and base coordinates come from OpenPencil: Page 1 / Section 2.
 export const agents = [
   { id: 'supervisor', x: 657, y: 571, amplitude: 5, period: 9.2, phase: 0.4 },
-  { id: 'quality', x: 448, y: 470, amplitude: 10, period: 7.6, phase: 0.0, side: 'left', portY: 48 },
-  { id: 'equipment', x: 448, y: 607, amplitude: 8, period: 8.8, phase: 1.8, side: 'left', portY: 71 },
-  { id: 'safety', x: 448, y: 744, amplitude: 11, period: 8.1, phase: 3.5, side: 'left', portY: 94 },
-  { id: 'production', x: 938, y: 470, amplitude: 9, period: 8.4, phase: 2.6, side: 'right', portY: 48 },
-  { id: 'energy', x: 938, y: 607, amplitude: 10, period: 7.9, phase: 4.7, side: 'right', portY: 71 },
-  { id: 'logistics', x: 938, y: 744, amplitude: 8, period: 9.6, phase: 5.6, side: 'right', portY: 94 },
+  { id: 'quality', x: 448, y: 470, amplitude: 10, period: 7.6, phase: 0.0 },
+  { id: 'equipment', x: 448, y: 607, amplitude: 8, period: 8.8, phase: 1.8 },
+  { id: 'safety', x: 448, y: 744, amplitude: 11, period: 8.1, phase: 3.5 },
+  { id: 'production', x: 938, y: 470, amplitude: 9, period: 8.4, phase: 2.6 },
+  { id: 'energy', x: 938, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
+  { id: 'logistics', x: 938, y: 744, amplitude: 8, period: 9.6, phase: 5.6 },
 ];
+
+const tileSize = agent => agent.id === 'supervisor' ? 142 : 70;
+const outlineInset = 1;
+const cornerRadius = 14;
+
+function closestIntervalPoints(aMin, aMax, bMin, bMax) {
+  if (aMax < bMin) return [aMax, bMin];
+  if (bMax < aMin) return [aMin, bMax];
+  const shared = (Math.max(aMin, bMin) + Math.min(aMax, bMax)) / 2;
+  return [shared, shared];
+}
+
+function outlineCore(position, size) {
+  const inset = outlineInset + cornerRadius;
+  return {
+    left: position.x + inset,
+    right: position.x + size - inset,
+    top: position.y + inset,
+    bottom: position.y + size - inset,
+  };
+}
+
+export function nearestFreePosition(desired, size, occupied, clearance = 44) {
+  const xs = [desired.x];
+  const ys = [desired.y];
+  for (const other of occupied) {
+    xs.push(other.x - size - clearance, other.x + other.size + clearance);
+    ys.push(other.y - size - clearance, other.y + other.size + clearance);
+  }
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const x of xs) {
+    for (const y of ys) {
+      const overlaps = occupied.some(other =>
+        x < other.x + other.size + clearance &&
+        x + size + clearance > other.x &&
+        y < other.y + other.size + clearance &&
+        y + size + clearance > other.y
+      );
+      if (overlaps) continue;
+      const distance = (x - desired.x) ** 2 + (y - desired.y) ** 2;
+      if (distance < bestDistance) {
+        best = { x, y };
+        bestDistance = distance;
+      }
+    }
+  }
+  return best;
+}
 
 export function positionAt(agent, seconds, reducedMotion = false) {
   if (reducedMotion) return { x: agent.x, y: agent.y };
@@ -22,11 +72,36 @@ export function positionAt(agent, seconds, reducedMotion = false) {
 }
 
 export function connectionAt(agent, position, supervisor) {
-  const left = agent.side === 'left';
-  const start = { x: position.x + (left ? 69 : 1), y: position.y + 35 };
-  const end = { x: supervisor.x + (left ? 1 : 141), y: supervisor.y + agent.portY };
-  // Full-width control handles preserve the original S-shaped connections.
-  return { start, end, path: `M ${start.x} ${start.y} C ${end.x} ${start.y} ${start.x} ${end.y} ${end.x} ${end.y}` };
+  // A rounded rectangle is an inner rectangle expanded by its corner radius.
+  // The nearest inner points give the shortest line between tile outlines.
+  const from = outlineCore(position, tileSize(agent));
+  const to = outlineCore(supervisor, tileSize({ id: 'supervisor' }));
+  const [fromX, toX] = closestIntervalPoints(from.left, from.right, to.left, to.right);
+  const [fromY, toY] = closestIntervalPoints(from.top, from.bottom, to.top, to.bottom);
+  const distance = Math.hypot(toX - fromX, toY - fromY);
+  let start;
+  let end;
+
+  if (distance > 0) {
+    const dx = (toX - fromX) / distance;
+    const dy = (toY - fromY) / distance;
+    start = { x: fromX + dx * cornerRadius, y: fromY + dy * cornerRadius };
+    end = { x: toX - dx * cornerRadius, y: toY - dy * cornerRadius };
+  } else {
+    // During a drag tiles may briefly overlap; keep ports on facing edges.
+    const dx = supervisor.x + 71 - position.x - tileSize(agent) / 2;
+    const dy = supervisor.y + 71 - position.y - tileSize(agent) / 2;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const right = dx >= 0;
+      start = { x: right ? position.x + tileSize(agent) - outlineInset : position.x + outlineInset, y: fromY };
+      end = { x: right ? supervisor.x + outlineInset : supervisor.x + 142 - outlineInset, y: toY };
+    } else {
+      const below = dy >= 0;
+      start = { x: fromX, y: below ? position.y + tileSize(agent) - outlineInset : position.y + outlineInset };
+      end = { x: toX, y: below ? supervisor.y + outlineInset : supervisor.y + 142 - outlineInset };
+    }
+  }
+  return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
 }
 
 if (typeof document !== 'undefined') {
@@ -47,7 +122,7 @@ if (typeof document !== 'undefined') {
     logistics: '#C55F91',
   };
   const bounds = agents.reduce((result, agent) => {
-    const size = agent.id === 'supervisor' ? 142 : 70;
+    const size = tileSize(agent);
     return {
       left: Math.min(result.left, agent.x),
       top: Math.min(result.top, agent.y),
@@ -73,6 +148,21 @@ if (typeof document !== 'undefined') {
   });
   let selectedTile = null;
   let drag = null;
+  let tileDrag = null;
+
+  function displayedPosition(agent, seconds) {
+    return tileDrag?.agent === agent && tileDrag.moved
+      ? tileDrag.position
+      : positionAt(agent, seconds, preference.matches);
+  }
+
+  function worldAt(clientX, clientY) {
+    const viewport = controls.getBoundingClientRect();
+    return {
+      x: camera.x + (clientX - viewport.left) / viewport.width * camera.width,
+      y: camera.y + (clientY - viewport.top) / viewport.height * camera.height,
+    };
+  }
 
   function syncTileAppearance() {
     // A dashed connection means both endpoints are connected and keep their colors.
@@ -120,14 +210,68 @@ if (typeof document !== 'undefined') {
     }
   }
 
-  for (const { tile, button } of views) {
-    // Keep the moving tile as the click target until the pointer is released.
+  for (const { agent, tile, button } of views) {
+    let suppressClick = false;
     button.addEventListener('pointerdown', event => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || tileDrag) return;
+      const viewport = controls.getBoundingClientRect();
+      if (!viewport.width || !viewport.height) return;
+      const pointer = worldAt(event.clientX, event.clientY);
+      const position = displayedPosition(agent, elapsed);
+      tileDrag = {
+        agent,
+        button,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        grabX: pointer.x - position.x,
+        grabY: pointer.y - position.y,
+        position,
+        moved: false,
+      };
       button.setPointerCapture(event.pointerId);
       button.focus({ preventScroll: true });
     });
-    button.addEventListener('click', () => { selectTile(tile); });
+    button.addEventListener('pointermove', event => {
+      if (!tileDrag || tileDrag.button !== button || tileDrag.pointerId !== event.pointerId) return;
+      if (!tileDrag.moved && Math.hypot(event.clientX - tileDrag.startClientX, event.clientY - tileDrag.startClientY) < 4) return;
+      tileDrag.moved = true;
+      button.classList.add('is-dragging');
+      const pointer = worldAt(event.clientX, event.clientY);
+      tileDrag.position = { x: pointer.x - tileDrag.grabX, y: pointer.y - tileDrag.grabY };
+      draw(elapsed);
+      event.preventDefault();
+    });
+
+    function finishTileDrag(event) {
+      if (!tileDrag || tileDrag.button !== button || tileDrag.pointerId !== event.pointerId) return;
+      if (tileDrag.moved) {
+        const occupied = views
+          .filter(view => view.agent !== agent)
+          .map(view => ({ ...displayedPosition(view.agent, elapsed), size: tileSize(view.agent) }));
+        const position = nearestFreePosition(tileDrag.position, tileSize(agent), occupied);
+        const floatingPosition = positionAt(agent, elapsed, preference.matches);
+        agent.x += position.x - floatingPosition.x;
+        agent.y += position.y - floatingPosition.y;
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 0);
+      }
+      tileDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+      draw(elapsed);
+    }
+
+    button.addEventListener('pointerup', finishTileDrag);
+    button.addEventListener('pointercancel', finishTileDrag);
+    button.addEventListener('lostpointercapture', finishTileDrag);
+    button.addEventListener('click', event => {
+      if (suppressClick) {
+        event.preventDefault();
+        return;
+      }
+      selectTile(tile);
+    });
     button.addEventListener('pointerenter', () => { tile.dataset.hover = 'true'; });
     button.addEventListener('pointerleave', () => { tile.dataset.hover = 'false'; });
     button.addEventListener('focus', () => { tile.dataset.hover = 'true'; });
@@ -202,11 +346,11 @@ if (typeof document !== 'undefined') {
   let previousTime = null;
 
   function draw(seconds) {
-    const supervisor = positionAt(agents[0], seconds, preference.matches);
+    const supervisor = displayedPosition(agents[0], seconds);
     for (const { agent, tile, button, path, nodes } of views) {
-      const position = positionAt(agent, seconds, preference.matches);
+      const position = displayedPosition(agent, seconds);
       tile.setAttribute('transform', `translate(${position.x} ${position.y})`);
-      const size = agent.id === 'supervisor' ? 142 : 70;
+      const size = tileSize(agent);
       button.style.left = `${(position.x - 4 - camera.x) / camera.width * 100}%`;
       button.style.top = `${(position.y - 4 - camera.y) / camera.height * 100}%`;
       button.style.width = `${(size + 8) / camera.width * 100}%`;
