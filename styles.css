@@ -23,7 +23,7 @@ body {
   width: 100%;
   height: 100vh;
   height: 100svh;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 
@@ -48,7 +48,7 @@ body {
   stroke-width: 2;
 }
 
-/* 각 전문 에이전트의 정보가 슈퍼바이저 쪽으로 이동합니다. */
+/* 경로는 전문 에이전트에서 슈퍼바이저 순서로 유지하고 점선의 이동 방향만 바꿉니다. */
 .connections [data-connected="true"] path {
   stroke: var(--active-connection-color);
   stroke-width: 2.4;
@@ -56,13 +56,112 @@ body {
   animation: flow-dash-move 1.2s linear infinite;
 }
 
+.connections [data-connected="true"][data-direction="from-supervisor"] path {
+  animation-name: flow-dash-reverse;
+}
+
 @keyframes flow-dash-move {
   to { stroke-dashoffset: -24; }
 }
 
+@keyframes flow-dash-reverse {
+  to { stroke-dashoffset: 24; }
+}
+
 .connections,
-.nodes {
+.nodes,
+.subtile-links,
+.subtiles {
   pointer-events: none;
+}
+
+/* 3단계 연결도 작업 중에는 방향이 있는 정보 흐름을 표시합니다. */
+.subtile-links path {
+  fill: none;
+  stroke: #4c4e53;
+  stroke-width: 1.8;
+}
+
+.subtile-links path[data-connected="true"] {
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  animation: flow-dash-move 1.2s linear infinite;
+}
+
+.subtile-links path[data-connected="true"][data-direction="to-parent"] {
+  animation-name: flow-dash-reverse;
+}
+
+.subtile-circle {
+  fill: color-mix(in srgb, var(--subtile-color) 22%, #000);
+  stroke: var(--subtile-color);
+  stroke-width: 2;
+}
+
+.subtile-icon {
+  fill: none;
+  stroke: color-mix(in srgb, var(--subtile-color) 72%, white);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.subtiles [data-connected="false"] .subtile-circle {
+  fill: rgb(76 78 83 / 30%);
+  stroke: #4c4e53;
+}
+
+.subtiles [data-connected="false"] .subtile-icon {
+  stroke: #6a6e76;
+}
+
+.subtiles [data-hover="true"] .subtile-circle,
+.subtiles [data-selected="true"] .subtile-circle {
+  filter: brightness(1.2) drop-shadow(0 0 6px var(--subtile-color));
+}
+
+.subtiles [data-connected="false"][data-selected="true"] .subtile-circle {
+  filter: brightness(1.2) drop-shadow(0 0 6px #4c4e53);
+}
+
+.subtiles [data-flowing="true"][data-selected="false"]:not([data-hover="true"]) .subtile-circle {
+  animation: subtile-flow-pulse 1s ease-in-out infinite;
+}
+
+@keyframes subtile-flow-pulse {
+  50% { filter: brightness(1.25) drop-shadow(0 0 5px var(--subtile-color)); }
+}
+
+.subtile-ports circle {
+  fill: #4c4e53;
+}
+
+.subtile-ports[data-connected="true"] circle {
+  fill: #fff;
+}
+
+.subtile-ports circle.subtile-progress-track,
+.subtile-ports circle.subtile-progress-ring {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.subtile-ports circle.subtile-progress-track {
+  stroke: rgb(0 0 0 / 75%);
+}
+
+.subtile-ports circle.subtile-progress-ring {
+  stroke: color-mix(in srgb, var(--subtile-color) 70%, white);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.subtile-ports[data-connected="false"] circle.subtile-progress-track,
+.subtile-ports[data-connected="false"] circle.subtile-progress-ring {
+  opacity: 0;
 }
 
 .nodes circle {
@@ -71,6 +170,29 @@ body {
 
 .nodes [data-connected="true"] circle {
   fill: var(--active-connection-color);
+}
+
+.nodes circle.node-progress-track,
+.nodes circle.node-progress-ring {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.nodes circle.node-progress-track {
+  stroke: rgb(0 0 0 / 75%);
+}
+
+.nodes circle.node-progress-ring {
+  stroke: color-mix(in srgb, var(--node-progress-color) 70%, white);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.nodes [data-connected="false"] circle.node-progress-track,
+.nodes [data-connected="false"] circle.node-progress-ring {
+  opacity: 0;
 }
 
 [data-agent] image,
@@ -90,7 +212,7 @@ body {
   border: 0;
   outline: none;
   background: transparent;
-  cursor: grab;
+  cursor: default;
   pointer-events: auto;
 }
 
@@ -98,19 +220,301 @@ body {
   cursor: grabbing;
 }
 
+.subtile-hit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  outline: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: default;
+  pointer-events: auto;
+}
+
+.subtile-hit:focus-visible {
+  outline: 1px solid #fff;
+  outline-offset: -3px;
+}
+
+.subtile-hit.is-dragging {
+  cursor: grabbing;
+}
+
 .tile-controls {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(100vw, calc(100svh * 16 / 9));
-  aspect-ratio: 16 / 9;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   overflow: hidden;
 }
 
+.tile-tooltip {
+  position: absolute;
+  z-index: 5;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 4px 7px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 5px;
+  background: rgb(26 30 39 / 94%);
+  color: #f5f7fa;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 45%);
+  font: 500 11px/1.3 system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tile-tooltip[hidden] {
+  display: none;
+}
+
+/* 선택된 타일 안에서 기존 도형이 정보 타일 크기로 확장됩니다. */
+.tile-detail-frame {
+  pointer-events: none;
+}
+
+[data-agent][data-selected="true"] > image {
+  visibility: hidden;
+}
+
+[data-agent="supervisor"][data-selected="true"] > .supervisor-compact-fill {
+  visibility: hidden;
+}
+
+[data-agent="supervisor"][data-selected="true"] .supervisor-compact-stats {
+  display: none;
+}
+
+.supervisor-compact-stats {
+  pointer-events: none;
+  transition: filter 180ms ease;
+}
+
+.supervisor-compact-stats rect {
+  fill: var(--stat-background);
+}
+
+.supervisor-compact-stats text {
+  fill: var(--stat-color);
+  font: 700 14px system-ui, sans-serif;
+}
+
+.agent-details {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgb(76 78 83 / 30%);
+  background: color-mix(in srgb, var(--card-accent, #4c4e53) 30%, transparent);
+  color: #f2f3f5;
+  pointer-events: none;
+}
+
+.agent-details[hidden],
+.agent-details [hidden] {
+  display: none;
+}
+
+.agent-details__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-details__icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.agent-details__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-details__role {
+  margin: 0 0 3px;
+  color: #aeb9c6;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-details__title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.agent-details__status {
+  flex: none;
+  max-width: 104px;
+  padding: 3px 5px;
+  border: 1px solid #4c4e53;
+  border-radius: 999px;
+  color: #dce2e8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.agent-details__task {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.agent-details__progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #343941;
+}
+
+.agent-details__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--card-accent);
+}
+
+.agent-details__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: #aeb9c6;
+  font-size: 11px;
+}
+
+.agent-details__models {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-details__count {
+  flex: none;
+  white-space: nowrap;
+}
+
+.agent-details__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.agent-details__stats > div {
+  display: grid;
+  gap: 2px;
+  padding: 5px 2px;
+  border-radius: 6px;
+  background: var(--stat-background, #242a31);
+  text-align: center;
+}
+
+.agent-details__stats > [data-stat-card="running"],
+.supervisor-compact-stats > [data-stat-card="running"] {
+  --stat-background: #19383d;
+  --stat-color: #24caa5;
+}
+
+.agent-details__stats > [data-stat-card="pending"],
+.supervisor-compact-stats > [data-stat-card="pending"] {
+  --stat-background: #3d352b;
+  --stat-color: #ffad28;
+}
+
+.agent-details__stats > [data-stat-card="bottleneck"],
+.supervisor-compact-stats > [data-stat-card="bottleneck"] {
+  --stat-background: #412c3a;
+  --stat-color: #ff5364;
+}
+
+.agent-details__stats > [data-stat-card="resolved"],
+.supervisor-compact-stats > [data-stat-card="resolved"] {
+  --stat-background: #263449;
+  --stat-color: #8db9e8;
+}
+
+.agent-details__stats strong {
+  color: var(--stat-color, var(--card-accent));
+  font-size: 17px;
+}
+
+.agent-details__stats span {
+  color: #aeb9c6;
+  font-size: 11px;
+}
+
+.agent-details__summary {
+  margin: 9px 0 0;
+  padding: 7px;
+  border: 1px solid #343941;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.reset-layout {
+  position: absolute;
+  z-index: 1;
+  left: 24px;
+  bottom: 24px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #4c4e53;
+  border-radius: 8px;
+  background: #17191c;
+  color: #f2f3f5;
+  cursor: default;
+}
+
+.reset-layout svg {
+  width: 18px;
+  height: 18px;
+}
+
+.reset-layout:hover {
+  background: #292c31;
+}
+
+.reset-layout:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .reset-layout {
+    left: 16px;
+    bottom: 16px;
+  }
+}
+
+/* 연결된 타일마다 동일한 1초 주기로 밝아졌다 돌아옵니다. */
+[data-agent][data-flowing="true"][data-selected="false"]:not([data-hover="true"]) image,
+[data-agent][data-flowing="true"][data-selected="false"]:not([data-hover="true"]) .tile-outline {
+  animation: tile-flow-pulse 1s ease-in-out infinite;
+}
+
+@keyframes tile-flow-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25) drop-shadow(0 0 5px var(--tile-glow-color)); }
+}
+
 [data-agent][data-hover="true"] image,
-[data-agent][data-hover="true"] .tile-outline {
+[data-agent][data-hover="true"] .tile-outline,
+[data-agent][data-hover="true"] .supervisor-compact-stats {
   filter: brightness(1.1);
 }
 
@@ -126,13 +530,18 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .connections [data-connected="true"] path {
+  .connections [data-connected="true"] path,
+  .subtile-links path[data-connected="true"],
+  .subtiles [data-flowing="true"] .subtile-circle {
     animation: none;
   }
 
   [data-agent] image,
-  [data-agent] .tile-outline {
+  [data-agent] .tile-outline,
+  [data-agent] .supervisor-compact-stats,
+  [data-agent] .agent-details {
     transition: none;
+    animation: none;
   }
 }
 

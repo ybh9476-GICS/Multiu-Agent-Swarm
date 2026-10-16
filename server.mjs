@@ -7,7 +7,10 @@ const resources = new Map([
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
   ['/graph.js', ['graph.js', 'text/javascript; charset=utf-8']],
+  ['/subtiles.js', ['subtiles.js', 'text/javascript; charset=utf-8']],
   ['/assets/section-2.png', ['assets/section-2.png', 'image/png']],
+  ['/assets/supervisor-compact.svg', ['assets/supervisor-compact.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/supervisor-detail.svg', ['assets/supervisor-detail.svg', 'image/svg+xml; charset=utf-8']],
 ]);
 
 for (const agent of ['quality', 'supervisor', 'production', 'equipment', 'safety', 'energy', 'logistics']) {

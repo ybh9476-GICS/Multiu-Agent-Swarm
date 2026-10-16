@@ -1,12 +1,14 @@
-// Artwork and base coordinates come from OpenPencil: Page 1 / Section 2.
+import { layoutSubtiles, settleSubtilePositions, submenuIconPaths, submenuItems, subtileConnectionAt, subtileFloatAt, subtileMockFlow, subtileRadius } from './subtiles.js';
+
+// Tile artwork follows OpenPencil: Page 1 / Section 2; positions form the three-level mock.
 export const agents = [
   { id: 'supervisor', x: 657, y: 571, amplitude: 5, period: 9.2, phase: 0.4 },
-  { id: 'quality', x: 448, y: 470, amplitude: 10, period: 7.6, phase: 0.0 },
-  { id: 'equipment', x: 448, y: 607, amplitude: 8, period: 8.8, phase: 1.8 },
-  { id: 'safety', x: 448, y: 744, amplitude: 11, period: 8.1, phase: 3.5 },
-  { id: 'production', x: 938, y: 470, amplitude: 9, period: 8.4, phase: 2.6 },
-  { id: 'energy', x: 938, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
-  { id: 'logistics', x: 938, y: 744, amplitude: 8, period: 9.6, phase: 5.6 },
+  { id: 'quality', x: 555, y: 375, amplitude: 10, period: 7.6, phase: 0.0 },
+  { id: 'equipment', x: 450, y: 607, amplitude: 8, period: 8.8, phase: 1.8 },
+  { id: 'safety', x: 555, y: 795, amplitude: 11, period: 8.1, phase: 3.5 },
+  { id: 'production', x: 830, y: 375, amplitude: 9, period: 8.4, phase: 2.6 },
+  { id: 'energy', x: 935, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
+  { id: 'logistics', x: 830, y: 795, amplitude: 8, period: 9.6, phase: 5.6 },
 ];
 
 const tileSize = agent => agent.id === 'supervisor' ? 142 : 70;
@@ -20,22 +22,38 @@ function closestIntervalPoints(aMin, aMax, bMin, bMax) {
   return [shared, shared];
 }
 
-function outlineCore(position, size) {
+function outlineCore(rect) {
   const inset = outlineInset + cornerRadius;
   return {
-    left: position.x + inset,
-    right: position.x + size - inset,
-    top: position.y + inset,
-    bottom: position.y + size - inset,
+    left: rect.x + inset,
+    right: rect.x + rect.width - inset,
+    top: rect.y + inset,
+    bottom: rect.y + rect.height - inset,
   };
 }
 
+export function tileRect(agent, position, expanded = false) {
+  const size = tileSize(agent);
+  if (!expanded) return { ...position, width: size, height: size };
+  const width = agent.id === 'supervisor' ? 330 : 340;
+  const height = agent.id === 'supervisor' ? 165 : 140;
+  const x = agent.id === 'supervisor' ? position.x + (size - width) / 2
+    : ['quality', 'equipment', 'safety'].includes(agent.id) ? position.x + size - width : position.x;
+  // Keep the content's top edge in place; remove only the empty space below it.
+  const y = position.y + (size - (agent.id === 'supervisor' ? 185 : 170)) / 2;
+  return { x, y, width, height };
+}
+
 export function nearestFreePosition(desired, size, occupied, clearance = 44) {
+  const width = typeof size === 'number' ? size : size.width;
+  const height = typeof size === 'number' ? size : size.height;
   const xs = [desired.x];
   const ys = [desired.y];
   for (const other of occupied) {
-    xs.push(other.x - size - clearance, other.x + other.size + clearance);
-    ys.push(other.y - size - clearance, other.y + other.size + clearance);
+    const otherWidth = other.width ?? other.size;
+    const otherHeight = other.height ?? other.size;
+    xs.push(other.x - width - clearance, other.x + otherWidth + clearance);
+    ys.push(other.y - height - clearance, other.y + otherHeight + clearance);
   }
 
   let best = null;
@@ -43,10 +61,10 @@ export function nearestFreePosition(desired, size, occupied, clearance = 44) {
   for (const x of xs) {
     for (const y of ys) {
       const overlaps = occupied.some(other =>
-        x < other.x + other.size + clearance &&
-        x + size + clearance > other.x &&
-        y < other.y + other.size + clearance &&
-        y + size + clearance > other.y
+        x < other.x + (other.width ?? other.size) + clearance &&
+        x + width + clearance > other.x &&
+        y < other.y + (other.height ?? other.size) + clearance &&
+        y + height + clearance > other.y
       );
       if (overlaps) continue;
       const distance = (x - desired.x) ** 2 + (y - desired.y) ** 2;
@@ -71,11 +89,110 @@ export function positionAt(agent, seconds, reducedMotion = false) {
   };
 }
 
-export function connectionAt(agent, position, supervisor) {
+// Local-only activity mock: progress is measured in active working time.
+// A rare outage pauses that progress; task handoff keeps 100% visible briefly.
+export function createMockTaskState(random = Math.random) {
+  const duration = 32 + random() * 14;
+  const offlineAt = random() < 0.12 ? duration * (0.3 + random() * 0.4) : Infinity;
+  return { phase: 'working', progress: 0, worked: 0, duration, offlineAt, remaining: 0, taskIndex: 0 };
+}
+
+export function advanceMockTaskState(state, seconds, random = Math.random) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return false;
+  let remaining = seconds;
+  let changed = false;
+  while (remaining > 1e-9) {
+    if (state.phase === 'working') {
+      const step = Math.min(remaining, state.duration - state.worked, state.offlineAt - state.worked);
+      state.worked += step;
+      remaining -= step;
+      state.progress = Math.min(100, state.worked / state.duration * 100);
+      if (state.worked >= state.duration - 1e-9) {
+        state.phase = 'handoff';
+        state.progress = 100;
+        state.remaining = 2.5 + random() * 1.5;
+        changed = true;
+      } else if (state.worked >= state.offlineAt - 1e-9) {
+        state.phase = 'offline';
+        state.offlineAt = Infinity;
+        state.remaining = 4 + random() * 3;
+        changed = true;
+      }
+    } else {
+      const step = Math.min(remaining, state.remaining);
+      state.remaining -= step;
+      remaining -= step;
+      if (state.remaining > 1e-9) continue;
+      if (state.phase === 'offline') {
+        state.phase = 'working';
+      } else {
+        const next = createMockTaskState(random);
+        Object.assign(state, next, { taskIndex: state.taskIndex + 1 });
+      }
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+export const mockConnectionActive = state => state.phase === 'working';
+export const mockTileActive = state => state.phase !== 'offline';
+
+const outboundFirst = new Set(['quality', 'production', 'logistics']);
+export function mockFlowDirection(agentId, taskIndex = 0) {
+  const fromSupervisor = outboundFirst.has(agentId) !== (taskIndex % 2 === 1);
+  return fromSupervisor ? 'from-supervisor' : 'to-supervisor';
+}
+
+// Expanded tiles stay anchored. Earlier expanded tiles and then compact tiles
+// yield only when the newest expanded outline would collide with them.
+export function resolveTilePositions(items, selectedIds, seconds, reducedMotion = false, dragged = null, fixedPositions = new Map()) {
+  const positions = new Map(items.map(agent => [agent.id,
+    dragged?.id === agent.id ? dragged.position : fixedPositions.get(agent.id) ?? positionAt(agent, seconds, reducedMotion)]));
+  const selected = typeof selectedIds === 'string' ? [selectedIds] : [...(selectedIds ?? [])];
+  const selectedSet = new Set(selected);
+  if (!selectedSet.size) return positions;
+
+  const expanded = selected.reverse().map(id => items.find(agent => agent.id === id)).filter(Boolean);
+  if (dragged && selectedSet.has(dragged.id)) {
+    const index = expanded.findIndex(agent => agent.id === dragged.id);
+    if (index > 0) expanded.unshift(expanded.splice(index, 1)[0]);
+  }
+  const occupied = [];
+  for (const agent of expanded) {
+    const position = positions.get(agent.id);
+    const rect = tileRect(agent, position, true);
+    if (!occupied.length) {
+      occupied.push(rect);
+      continue;
+    }
+    const clear = nearestFreePosition(rect, rect, occupied, 22);
+    if (clear.x !== rect.x || clear.y !== rect.y) {
+      positions.set(agent.id, { x: position.x + clear.x - rect.x, y: position.y + clear.y - rect.y });
+    }
+    occupied.push({ x: clear.x, y: clear.y, width: rect.width, height: rect.height });
+  }
+  if (dragged && !selectedSet.has(dragged.id)) {
+    const moving = items.find(agent => agent.id === dragged.id);
+    if (moving) occupied.push(tileRect(moving, positions.get(moving.id)));
+  }
+  for (const agent of items) {
+    if (selectedSet.has(agent.id) || agent.id === dragged?.id) continue;
+    const position = positions.get(agent.id);
+    const rect = tileRect(agent, position);
+    // Leave room for both tiles' small orbits, so the pushed layout stays steady.
+    const clear = nearestFreePosition(rect, rect, occupied, 22);
+    positions.set(agent.id, { x: position.x + clear.x - rect.x, y: position.y + clear.y - rect.y });
+    occupied.push({ x: clear.x, y: clear.y, width: rect.width, height: rect.height });
+  }
+  return positions;
+}
+
+export function connectionAt(agent, position, supervisor, fromRect = tileRect(agent, position), toRect = tileRect({ id: 'supervisor' }, supervisor)) {
   // A rounded rectangle is an inner rectangle expanded by its corner radius.
   // The nearest inner points give the shortest line between tile outlines.
-  const from = outlineCore(position, tileSize(agent));
-  const to = outlineCore(supervisor, tileSize({ id: 'supervisor' }));
+  const from = outlineCore(fromRect);
+  const to = outlineCore(toRect);
   const [fromX, toX] = closestIntervalPoints(from.left, from.right, to.left, to.right);
   const [fromY, toY] = closestIntervalPoints(from.top, from.bottom, to.top, to.bottom);
   const distance = Math.hypot(toX - fromX, toY - fromY);
@@ -89,16 +206,16 @@ export function connectionAt(agent, position, supervisor) {
     end = { x: toX - dx * cornerRadius, y: toY - dy * cornerRadius };
   } else {
     // During a drag tiles may briefly overlap; keep ports on facing edges.
-    const dx = supervisor.x + 71 - position.x - tileSize(agent) / 2;
-    const dy = supervisor.y + 71 - position.y - tileSize(agent) / 2;
+    const dx = toRect.x + toRect.width / 2 - fromRect.x - fromRect.width / 2;
+    const dy = toRect.y + toRect.height / 2 - fromRect.y - fromRect.height / 2;
     if (Math.abs(dx) >= Math.abs(dy)) {
       const right = dx >= 0;
-      start = { x: right ? position.x + tileSize(agent) - outlineInset : position.x + outlineInset, y: fromY };
-      end = { x: right ? supervisor.x + outlineInset : supervisor.x + 142 - outlineInset, y: toY };
+      start = { x: right ? fromRect.x + fromRect.width - outlineInset : fromRect.x + outlineInset, y: fromY };
+      end = { x: right ? toRect.x + outlineInset : toRect.x + toRect.width - outlineInset, y: toY };
     } else {
       const below = dy >= 0;
-      start = { x: fromX, y: below ? position.y + tileSize(agent) - outlineInset : position.y + outlineInset };
-      end = { x: toX, y: below ? supervisor.y + outlineInset : supervisor.y + 142 - outlineInset };
+      start = { x: fromX, y: below ? fromRect.y + fromRect.height - outlineInset : fromRect.y + outlineInset };
+      end = { x: toX, y: below ? toRect.y + outlineInset : toRect.y + toRect.height - outlineInset };
     }
   }
   return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
@@ -108,6 +225,8 @@ if (typeof document !== 'undefined') {
   const canvas = document.querySelector('.graph-canvas');
   const svg = document.querySelector('.graph-resource');
   const controls = document.querySelector('.tile-controls');
+  const tooltip = document.querySelector('.tile-tooltip');
+  const detailsTemplate = document.querySelector('.agent-details');
   const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const baseWidth = 1920;
   const baseHeight = 1080;
@@ -121,6 +240,48 @@ if (typeof document !== 'undefined') {
     energy: '#B9BD3E',
     logistics: '#C55F91',
   };
+  // Information fields follow the IMPIX Control Structure mockup; graph colors stay here.
+  const cardData = {
+    supervisor: { title: 'AI 슈퍼바이저 에이전트', role: 'L0 핵심 관제탑 (Control Tower)' },
+    quality: { title: 'AI 품질 에이전트', status: '승인 대기 1', tasks: ['불량 유형별 원인 추적 리포트 생성', '생산 라인 샘플 판정 분석'], models: 'Anomalib · YOLOv8', count: 28 },
+    equipment: { title: 'AI 설비예지보전 에이전트', status: '승인 대기 1', tasks: ['메인 모터 베어링 잔여수명 예측', '펌프 진동 추세 분석'], models: 'LSTM · RUL Regressor', count: 30 },
+    safety: { title: 'AI 안전 에이전트', status: '진행 중', tasks: ['C구역 화재·연기 영상 감시', '보호구 착용 영상 점검'], models: 'YOLOv8-Fire · Pose Estimation', count: 32 },
+    production: { title: 'AI 생산 최적화 에이전트', status: '진행 중', tasks: ['라인 밸런싱 시뮬레이션', '라인별 작업 순서 최적화'], models: 'XGBoost · Bottleneck Detector', count: 34 },
+    energy: { title: 'AI 에너지 에이전트', status: '진행 중', tasks: ['공조 설비 부하 이전 계획', '피크 시간대 전력 수요 예측'], models: 'Prophet · GRU', count: 37 },
+    logistics: { title: 'AI 물류 에이전트', status: '진행 중', tasks: ['자재 투입 배차 명령 하달', '입고 자재 경로 재계획'], models: 'RL Path Planner · RTD / ACS', count: 39 },
+  };
+  let tooltipButton = null;
+  let tooltipPointer = null;
+  function positionTooltip(event) {
+    if (!tooltipButton) return;
+    if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      tooltipPointer = { x: event.clientX, y: event.clientY };
+    }
+    const button = tooltipButton.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const x = (tooltipPointer?.x ?? button.left + button.width / 2) - canvasRect.left;
+    const y = (tooltipPointer?.y ?? button.top + button.height / 2) - canvasRect.top;
+    const left = x + 12 + tooltip.offsetWidth > canvasRect.width - 4
+      ? x - tooltip.offsetWidth - 12 : x + 12;
+    const top = y + 16 + tooltip.offsetHeight > canvasRect.height - 4
+      ? y - tooltip.offsetHeight - 12 : y + 16;
+    tooltip.style.left = `${Math.max(4, Math.min(canvasRect.width - tooltip.offsetWidth - 4, left))}px`;
+    tooltip.style.top = `${Math.max(4, Math.min(canvasRect.height - tooltip.offsetHeight - 4, top))}px`;
+  }
+  function showTileTooltip(button, label, event) {
+    if (tileDrag?.moved || subtileDrag?.moved) return;
+    if (tooltipButton !== button) tooltipPointer = null;
+    tooltipButton = button;
+    tooltip.textContent = label;
+    tooltip.hidden = false;
+    positionTooltip(event);
+  }
+  function hideTileTooltip(button) {
+    if (button && tooltipButton !== button) return;
+    tooltipButton = null;
+    tooltipPointer = null;
+    tooltip.hidden = true;
+  }
   const bounds = agents.reduce((result, agent) => {
     const size = tileSize(agent);
     return {
@@ -130,30 +291,149 @@ if (typeof document !== 'undefined') {
       bottom: Math.max(result.bottom, agent.y + size),
     };
   }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
-  const camera = {
-    x: (bounds.left + bounds.right - baseWidth) / 2,
-    y: (bounds.top + bounds.bottom - baseHeight) / 2,
-    width: baseWidth,
-    height: baseHeight,
-  };
+  function cameraForViewport() {
+    const viewport = controls.getBoundingClientRect();
+    const width = viewport.width || window.innerWidth || 1;
+    const height = viewport.height || window.innerHeight || 1;
+    const zoom = Math.max(1, Math.min(1.32, height / width / (baseHeight / baseWidth)));
+    const viewWidth = baseWidth / zoom;
+    const viewHeight = viewWidth * height / width;
+    return {
+      x: (bounds.left + bounds.right - viewWidth) / 2,
+      y: (bounds.top + bounds.bottom - viewHeight) / 2,
+      width: viewWidth,
+      height: viewHeight,
+    };
+  }
+  const camera = cameraForViewport();
+  const initialPositions = new Map(agents.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  const initialCamera = { ...camera };
   const views = agents.map(agent => {
     const connection = document.querySelector(`[data-connection="${agent.id}"]`);
+    const nodeGroup = document.querySelector(`[data-nodes="${agent.id}"]`);
+    const nodes = nodeGroup?.querySelectorAll('circle');
+    let progressTrack = null;
+    let progressRing = null;
+    if (nodeGroup) {
+      progressTrack = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      progressTrack.classList.add('node-progress-track');
+      progressTrack.setAttribute('r', '8');
+      progressRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      progressRing.classList.add('node-progress-ring');
+      progressRing.setAttribute('r', '8');
+      progressRing.setAttribute('pathLength', '100');
+      progressRing.setAttribute('stroke-dasharray', '100');
+      progressRing.setAttribute('stroke-dashoffset', '100');
+      nodeGroup.style.setProperty('--node-progress-color', activeColors[agent.id]);
+      nodeGroup.prepend(progressTrack, progressRing);
+    }
+    const details = detailsTemplate.cloneNode(true);
+    details.id = `agent-details-${agent.id}`;
+    const detailFrame = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    detailFrame.classList.add('tile-detail-frame');
+    detailFrame.append(details);
     return {
       agent,
       tile: document.querySelector(`[data-agent="${agent.id}"]`),
       button: document.querySelector(`[data-tile-control="${agent.id}"]`),
       path: connection?.querySelector('path'),
-      nodes: document.querySelector(`[data-nodes="${agent.id}"]`)?.querySelectorAll('circle'),
+      nodes,
+      progressTrack,
+      progressRing,
+      details,
+      detailFrame,
+      progressBar: details.querySelector('.agent-details__progress'),
+      progressFill: details.querySelector('.agent-details__progress span'),
     };
   });
-  let selectedTile = null;
+  detailsTemplate.remove();
+  const mockStates = new Map(agents.slice(1).map(agent => [agent.id, createMockTaskState()]));
+  const subtileLinks = document.querySelector('.subtile-links');
+  const subtileLayer = document.querySelector('.subtiles');
+  const selectedSubtiles = new Set();
+  const manualSubtileOffsets = new Map();
+  const suppressedSubtileClicks = new Set();
+  const subtileViews = submenuItems.map(item => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.dataset.subtileLink = item.id;
+    line.style.setProperty('--subtile-color', activeColors[item.parentId]);
+    subtileLinks.append(line);
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.dataset.subtile = item.id;
+    group.dataset.selected = 'false';
+    group.style.setProperty('--subtile-color', activeColors[item.parentId]);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.classList.add('subtile-circle');
+    circle.setAttribute('r', String(subtileRadius));
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    icon.classList.add('subtile-icon');
+    icon.setAttribute('transform', 'translate(-12 -12)');
+    icon.innerHTML = submenuIconPaths[item.icon];
+    group.append(circle, icon);
+    subtileLayer.append(group);
+    const ports = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    ports.classList.add('subtile-ports');
+    ports.style.setProperty('--subtile-color', activeColors[item.parentId]);
+    const parentNode = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const childNode = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    parentNode.setAttribute('r', '3');
+    childNode.setAttribute('r', '3');
+    const progressTrack = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    progressTrack.classList.add('subtile-progress-track');
+    progressTrack.setAttribute('r', '8');
+    const progressRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    progressRing.classList.add('subtile-progress-ring');
+    progressRing.setAttribute('r', '8');
+    progressRing.setAttribute('pathLength', '100');
+    progressRing.setAttribute('stroke-dasharray', '100');
+    ports.append(progressTrack, progressRing, parentNode, childNode);
+    subtileLayer.append(ports);
+    const button = document.createElement('button');
+    button.className = 'subtile-hit';
+    button.type = 'button';
+    button.dataset.subtileControl = item.id;
+    button.dataset.label = item.label;
+    button.setAttribute('aria-label', `${cardData[item.parentId].title} · ${item.label}`);
+    button.setAttribute('aria-pressed', 'false');
+    controls.append(button);
+    button.addEventListener('click', event => {
+      if (suppressedSubtileClicks.has(item.id)) {
+        event.preventDefault();
+        return;
+      }
+      const selected = !selectedSubtiles.has(item.id);
+      if (selected) selectedSubtiles.add(item.id);
+      else selectedSubtiles.delete(item.id);
+      group.dataset.selected = String(selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    button.addEventListener('pointerenter', event => { group.dataset.hover = 'true'; showTileTooltip(button, item.label, event); });
+    button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
+    button.addEventListener('pointerleave', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, item.label); });
+    button.addEventListener('blur', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    return { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing };
+  });
+  for (const { button, details } of views) {
+    button.setAttribute('aria-controls', details.id);
+    button.setAttribute('aria-expanded', 'false');
+  }
+  const selectedTiles = new Set();
+  const fixedSelectedPositions = new Map();
   let drag = null;
   let tileDrag = null;
+  let subtileDrag = null;
+  let lastSubtilePositions = new Map();
+  let lastParentAnchorFrames = new Map();
+  let lastSubtileDrawSeconds = null;
+  let frame = 0;
+  let mockTimer = 0;
+  let elapsed = 0;
+  let previousTime = null;
 
-  function displayedPosition(agent, seconds) {
-    return tileDrag?.agent === agent && tileDrag.moved
-      ? tileDrag.position
-      : positionAt(agent, seconds, preference.matches);
+  function displayedPositions(seconds) {
+    const dragged = tileDrag?.moved ? { id: tileDrag.agent.id, position: tileDrag.position } : null;
+    return resolveTilePositions(agents, selectedTiles, seconds, preference.matches, dragged, fixedSelectedPositions);
   }
 
   function worldAt(clientX, clientY) {
@@ -164,26 +444,51 @@ if (typeof document !== 'undefined') {
     };
   }
 
+  function syncSupervisorStats() {
+    const active = views.filter(view => view.agent.id !== 'supervisor' && mockConnectionActive(mockStates.get(view.agent.id)));
+    const pending = active.filter(view => cardData[view.agent.id].status.startsWith('승인 대기')).length;
+    const supervisorView = views.find(view => view.agent.id === 'supervisor');
+    const details = supervisorView.details;
+    details.querySelector('[data-stat="running"]').textContent = active.length;
+    details.querySelector('[data-stat="pending"]').textContent = pending;
+    details.querySelector('.agent-details__summary').textContent = active.length === 6
+      ? `전 에이전트 정상 작업 중 · 승인 대기 ${pending}`
+      : `${active.length}개 에이전트 연결 중 · 승인 대기 ${pending}`;
+    const compact = document.querySelector('.supervisor-compact-stats');
+    for (const stat of details.querySelectorAll('[data-stat]')) {
+      compact.querySelector(`[data-compact-stat="${stat.dataset.stat}"]`).textContent = stat.textContent;
+    }
+    supervisorView.button.setAttribute('aria-label',
+      `슈퍼바이저 에이전트 타일, 진행 중 ${active.length}, 승인 대기 ${pending}, 병목 ${details.querySelector('[data-stat="bottleneck"]').textContent}, 해결됨 ${details.querySelector('[data-stat="resolved"]').textContent}`);
+  }
+
   function syncTileAppearance() {
-    // A dashed connection means both endpoints are connected and keep their colors.
-    const connected = views.filter(({ path }) => {
+    const flowing = views.filter(({ path }) => {
       const dash = path?.getAttribute('stroke-dasharray');
       return dash && dash !== 'none';
     }).map(({ agent }) => agent.id);
     for (const { agent, tile, path, nodes } of views) {
-      const lineConnected = connected.includes(agent.id);
-      if (path) path.parentElement.dataset.connected = String(lineConnected);
-      if (nodes) nodes[0].parentElement.dataset.connected = String(lineConnected);
-      const isConnected = agent.id === 'supervisor' ? connected.length > 0 : lineConnected;
-      if (tile.dataset.connected === String(isConnected)) continue;
-      tile.dataset.connected = String(isConnected);
+      const lineFlowing = flowing.includes(agent.id);
+      if (path) path.parentElement.dataset.connected = String(lineFlowing);
+      if (nodes) nodes[0].parentElement.dataset.connected = String(lineFlowing);
+      tile.dataset.flowing = String(agent.id === 'supervisor' ? flowing.length > 0 : lineFlowing);
+      const online = agent.id === 'supervisor' || mockTileActive(mockStates.get(agent.id));
+      if (tile.dataset.connected === String(online)) continue;
+      tile.dataset.connected = String(online);
       const image = tile.querySelector('image');
-      const asset = `./assets/${agent.id}${isConnected ? '' : '-inactive'}.svg`;
+      const asset = agent.id === 'supervisor' ? './assets/supervisor-compact.svg'
+        : `./assets/${agent.id}${online ? '' : '-inactive'}.svg`;
       if (image.getAttribute('href') !== asset) image.setAttribute('href', asset);
-      const color = isConnected ? activeColors[agent.id] : inactiveColor;
+      const color = online ? activeColors[agent.id] : inactiveColor;
       tile.querySelector('.tile-outline').setAttribute('stroke', color);
       tile.style.setProperty('--tile-glow-color', color);
     }
+    for (const { item, group } of subtileViews) {
+      const online = mockTileActive(mockStates.get(item.parentId));
+      group.dataset.connected = String(online);
+    }
+    syncSupervisorStats();
+    for (const view of views) if (selectedTiles.has(view.agent.id)) renderAgentDetails(view);
   }
 
   syncTileAppearance();
@@ -193,31 +498,184 @@ if (typeof document !== 'undefined') {
     attributeFilter: ['stroke-dasharray'],
   });
 
+  function syncMockConnections() {
+    for (const { agent, path } of views) {
+      if (!path) continue;
+      const state = mockStates.get(agent.id);
+      path.parentElement.dataset.direction = mockFlowDirection(agent.id, state.taskIndex);
+      const dash = mockConnectionActive(state) ? '4 8' : 'none';
+      if (path.getAttribute('stroke-dasharray') !== dash) path.setAttribute('stroke-dasharray', dash);
+    }
+    syncTileAppearance();
+  }
+
+  function syncSubtileFlows() {
+    for (const { item, line, group, ports, progressRing } of subtileViews) {
+      const state = mockStates.get(item.parentId);
+      const flow = subtileMockFlow(item, state);
+      const connected = String(flow.connected);
+      if (line.dataset.connected !== connected) line.dataset.connected = connected;
+      if (line.dataset.direction !== flow.direction) line.dataset.direction = flow.direction;
+      const dash = flow.connected ? '4 8' : 'none';
+      if (line.getAttribute('stroke-dasharray') !== dash) line.setAttribute('stroke-dasharray', dash);
+      if (ports.dataset.connected !== connected) ports.dataset.connected = connected;
+      if (group.dataset.flowing !== connected) group.dataset.flowing = connected;
+      progressRing.setAttribute('stroke-dashoffset', String(100 - flow.progress));
+    }
+  }
+
+  syncMockConnections();
+  syncSubtileFlows();
+
   function updateCamera() {
     svg.setAttribute('viewBox', `${camera.x} ${camera.y} ${camera.width} ${camera.height}`);
     draw(elapsed);
   }
 
-  function selectTile(tile) {
-    if (selectedTile) {
-      selectedTile.dataset.selected = 'false';
-      document.querySelector(`[data-tile-control="${selectedTile.dataset.agent}"]`).setAttribute('aria-pressed', 'false');
-    }
-    selectedTile = selectedTile === tile ? null : tile;
-    if (selectedTile) {
-      selectedTile.dataset.selected = 'true';
-      document.querySelector(`[data-tile-control="${selectedTile.dataset.agent}"]`).setAttribute('aria-pressed', 'true');
-    }
+  function updateProgress(view) {
+    const state = mockStates.get(view.agent.id);
+    if (!state) return;
+    const progress = Math.round(state.progress * 10) / 10;
+    view.progressBar.setAttribute('aria-valuenow', String(Math.round(progress)));
+    view.progressFill.style.width = `${progress}%`;
+    view.progressRing.setAttribute('stroke-dashoffset', String(100 - progress));
   }
 
-  for (const { agent, tile, button } of views) {
+  function renderAgentDetails(view) {
+    const { agent, tile, details } = view;
+    if (!selectedTiles.has(agent.id)) {
+      details.hidden = true;
+      return;
+    }
+    const id = agent.id;
+    const data = cardData[id];
+    const state = mockStates.get(id);
+    const connected = tile.dataset.connected === 'true';
+    const color = connected ? activeColors[id] : inactiveColor;
+    details.dataset.agent = id;
+    details.style.setProperty('--card-accent', color);
+    details.querySelector('.agent-details__icon').src = id === 'supervisor' ? './assets/supervisor-detail.svg'
+      : `./assets/${id}${connected ? '' : '-inactive'}.svg`;
+    details.querySelector('.agent-details__title').textContent = data.title;
+    const role = details.querySelector('.agent-details__role');
+    role.hidden = id !== 'supervisor';
+    role.textContent = data.role || '';
+    const status = details.querySelector('.agent-details__status');
+    status.hidden = id === 'supervisor';
+    status.textContent = id === 'supervisor' ? '' : !connected ? '비활성'
+      : state.phase === 'handoff' ? '다음 과업 대기' : data.status;
+    const specialist = details.querySelector('.agent-details__specialist');
+    const supervisor = details.querySelector('.agent-details__supervisor');
+    specialist.hidden = id === 'supervisor';
+    supervisor.hidden = id !== 'supervisor';
+    if (id === 'supervisor') {
+      syncSupervisorStats();
+    } else {
+      details.querySelector('.agent-details__task').textContent = data.tasks[state.taskIndex % data.tasks.length];
+      updateProgress(view);
+      details.querySelector('.agent-details__models').textContent = data.models;
+      details.querySelector('.agent-details__count').textContent = `◷ ${data.count}`;
+    }
+    details.hidden = false;
+  }
+
+  function toggleTile(view) {
+    const { agent, tile, button, detailFrame } = view;
+    if (selectedTiles.has(agent.id)) {
+      const fixed = fixedSelectedPositions.get(agent.id);
+      const floating = positionAt(agent, elapsed, preference.matches);
+      agent.x += fixed.x - floating.x;
+      agent.y += fixed.y - floating.y;
+      fixedSelectedPositions.delete(agent.id);
+      selectedTiles.delete(agent.id);
+      tile.dataset.selected = 'false';
+      detailFrame.remove();
+      button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-expanded', 'false');
+    } else {
+      fixedSelectedPositions.set(agent.id, displayedPositions(elapsed).get(agent.id));
+      selectedTiles.add(agent.id);
+      const settled = displayedPositions(elapsed);
+      for (const id of selectedTiles) fixedSelectedPositions.set(id, settled.get(id));
+      tile.dataset.selected = 'true';
+      tile.insertBefore(detailFrame, tile.querySelector('.tile-outline'));
+      button.setAttribute('aria-pressed', 'true');
+      button.setAttribute('aria-expanded', 'true');
+    }
+    renderAgentDetails(view);
+    draw(elapsed);
+  }
+
+  function clearSelections(restorePositions = true) {
+    if (!selectedTiles.size) return;
+    for (const view of views) {
+      if (!selectedTiles.has(view.agent.id)) continue;
+      if (restorePositions) {
+        const fixed = fixedSelectedPositions.get(view.agent.id);
+        const floating = positionAt(view.agent, elapsed, preference.matches);
+        view.agent.x += fixed.x - floating.x;
+        view.agent.y += fixed.y - floating.y;
+      }
+      view.tile.dataset.selected = 'false';
+      view.detailFrame.remove();
+      view.button.setAttribute('aria-pressed', 'false');
+      view.button.setAttribute('aria-expanded', 'false');
+      view.details.hidden = true;
+    }
+    selectedTiles.clear();
+    fixedSelectedPositions.clear();
+    draw(elapsed);
+  }
+
+  document.querySelector('.reset-layout').addEventListener('click', () => {
+    hideTileTooltip();
+    if (tileDrag) {
+      const { button, pointerId } = tileDrag;
+      tileDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(pointerId)) button.releasePointerCapture(pointerId);
+    }
+    if (drag) {
+      const { pointerId } = drag;
+      drag = null;
+      canvas.classList.remove('is-panning');
+      if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+    }
+    for (const agent of agents) {
+      const position = initialPositions.get(agent.id);
+      agent.x = position.x;
+      agent.y = position.y;
+    }
+    Object.assign(camera, initialCamera);
+    selectedSubtiles.clear();
+    manualSubtileOffsets.clear();
+    if (subtileDrag) {
+      const { button, pointerId } = subtileDrag;
+      subtileDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(pointerId)) button.releasePointerCapture(pointerId);
+    }
+    for (const { group, button } of subtileViews) {
+      group.dataset.selected = 'false';
+      button.setAttribute('aria-pressed', 'false');
+    }
+    clearSelections(false);
+    elapsed = 0;
+    previousTime = null;
+    lastSubtilePositions = new Map();
+    lastSubtileDrawSeconds = null;
+    updateCamera();
+  });
+
+  for (const view of views) {
+    const { agent, tile, button } = view;
     let suppressClick = false;
     button.addEventListener('pointerdown', event => {
       if (event.button !== 0 || tileDrag) return;
       const viewport = controls.getBoundingClientRect();
       if (!viewport.width || !viewport.height) return;
       const pointer = worldAt(event.clientX, event.clientY);
-      const position = displayedPosition(agent, elapsed);
+      const position = displayedPositions(elapsed).get(agent.id);
       tileDrag = {
         agent,
         button,
@@ -236,6 +694,7 @@ if (typeof document !== 'undefined') {
       if (!tileDrag || tileDrag.button !== button || tileDrag.pointerId !== event.pointerId) return;
       if (!tileDrag.moved && Math.hypot(event.clientX - tileDrag.startClientX, event.clientY - tileDrag.startClientY) < 4) return;
       tileDrag.moved = true;
+      hideTileTooltip(button);
       button.classList.add('is-dragging');
       const pointer = worldAt(event.clientX, event.clientY);
       tileDrag.position = { x: pointer.x - tileDrag.grabX, y: pointer.y - tileDrag.grabY };
@@ -246,13 +705,35 @@ if (typeof document !== 'undefined') {
     function finishTileDrag(event) {
       if (!tileDrag || tileDrag.button !== button || tileDrag.pointerId !== event.pointerId) return;
       if (tileDrag.moved) {
-        const occupied = views
-          .filter(view => view.agent !== agent)
-          .map(view => ({ ...displayedPosition(view.agent, elapsed), size: tileSize(view.agent) }));
-        const position = nearestFreePosition(tileDrag.position, tileSize(agent), occupied);
+        let position = tileDrag.position;
+        const positions = displayedPositions(elapsed);
+        if (!selectedTiles.has(agent.id)) {
+          const occupied = views.filter(view => view.agent !== agent).map(view =>
+            tileRect(view.agent, positions.get(view.agent.id), selectedTiles.has(view.agent.id)));
+          const currentRect = tileRect(agent, tileDrag.position);
+          const clearRect = nearestFreePosition(currentRect, currentRect, occupied);
+          position = {
+            x: tileDrag.position.x + clearRect.x - currentRect.x,
+            y: tileDrag.position.y + clearRect.y - currentRect.y,
+          };
+        }
         const floatingPosition = positionAt(agent, elapsed, preference.matches);
         agent.x += position.x - floatingPosition.x;
         agent.y += position.y - floatingPosition.y;
+        if (selectedTiles.has(agent.id)) {
+          for (const id of selectedTiles) fixedSelectedPositions.set(id, positions.get(id));
+        }
+        // A drag commits the pushed layout, so collapsing the selected tile
+        // cannot put its neighbors back on top of the dropped tile.
+        if (selectedTiles.size) {
+          for (const view of views) {
+            if (view.agent === agent) continue;
+            const visible = positions.get(view.agent.id);
+            const orbit = positionAt(view.agent, elapsed, preference.matches);
+            view.agent.x += visible.x - orbit.x;
+            view.agent.y += visible.y - orbit.y;
+          }
+        }
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 0);
       }
@@ -270,17 +751,67 @@ if (typeof document !== 'undefined') {
         event.preventDefault();
         return;
       }
-      selectTile(tile);
+      toggleTile(view);
     });
-    button.addEventListener('pointerenter', () => { tile.dataset.hover = 'true'; });
-    button.addEventListener('pointerleave', () => { tile.dataset.hover = 'false'; });
-    button.addEventListener('focus', () => { tile.dataset.hover = 'true'; });
-    button.addEventListener('blur', () => { tile.dataset.hover = 'false'; });
+    button.addEventListener('pointerenter', event => { tile.dataset.hover = 'true'; showTileTooltip(button, cardData[agent.id].title, event); });
+    button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
+    button.addEventListener('pointerleave', () => { tile.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('focus', () => { tile.dataset.hover = 'true'; showTileTooltip(button, cardData[agent.id].title); });
+    button.addEventListener('blur', () => { tile.dataset.hover = 'false'; hideTileTooltip(button); });
     button.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && selectedTile) {
-        selectTile(selectedTile);
+      if (event.key === 'Escape' && selectedTiles.size) {
+        clearSelections();
       }
     });
+  }
+
+  for (const { item, button } of subtileViews) {
+    button.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || subtileDrag || tileDrag) return;
+      const center = lastSubtilePositions.get(item.id);
+      if (!center) return;
+      const pointer = worldAt(event.clientX, event.clientY);
+      subtileDrag = {
+        item, button, pointerId: event.pointerId,
+        startClientX: event.clientX, startClientY: event.clientY,
+        grabX: pointer.x - center.x, grabY: pointer.y - center.y,
+        center, moved: false,
+      };
+      button.setPointerCapture(event.pointerId);
+      button.focus({ preventScroll: true });
+    });
+    button.addEventListener('pointermove', event => {
+      if (!subtileDrag || subtileDrag.button !== button || subtileDrag.pointerId !== event.pointerId) return;
+      if (!subtileDrag.moved && Math.hypot(event.clientX - subtileDrag.startClientX,
+        event.clientY - subtileDrag.startClientY) < 4) return;
+      subtileDrag.moved = true;
+      hideTileTooltip(button);
+      button.classList.add('is-dragging');
+      const pointer = worldAt(event.clientX, event.clientY);
+      subtileDrag.center = { x: pointer.x - subtileDrag.grabX, y: pointer.y - subtileDrag.grabY };
+      draw(elapsed);
+      event.preventDefault();
+    });
+    function finishSubtileDrag(event) {
+      if (!subtileDrag || subtileDrag.button !== button || subtileDrag.pointerId !== event.pointerId) return;
+      if (subtileDrag.moved) {
+        const center = lastSubtilePositions.get(item.id);
+        const parent = lastParentAnchorFrames.get(item.parentId);
+        manualSubtileOffsets.set(item.id, {
+          x: center.x - parent.x - parent.width / 2,
+          y: center.y - parent.y - parent.height / 2,
+        });
+        suppressedSubtileClicks.add(item.id);
+        setTimeout(() => suppressedSubtileClicks.delete(item.id), 0);
+      }
+      subtileDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+      draw(elapsed);
+    }
+    button.addEventListener('pointerup', finishSubtileDrag);
+    button.addEventListener('pointercancel', finishSubtileDrag);
+    button.addEventListener('lostpointercapture', finishSubtileDrag);
   }
 
   canvas.addEventListener('wheel', event => {
@@ -294,14 +825,14 @@ if (typeof document !== 'undefined') {
     const worldX = camera.x + x * camera.width;
     const worldY = camera.y + y * camera.height;
     camera.width = baseWidth / zoom;
-    camera.height = baseHeight / zoom;
+    camera.height = camera.width * viewport.height / viewport.width;
     camera.x = worldX - x * camera.width;
     camera.y = worldY - y * camera.height;
     updateCamera();
   }, { passive: false });
 
   canvas.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('.tile-hit')) return;
+    if (event.button !== 0 || event.target.closest('button')) return;
     drag = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -329,10 +860,6 @@ if (typeof document !== 'undefined') {
 
   function finishDrag(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
-    if (event.type === 'pointerup' && !drag.moved && selectedTile) {
-      selectTile(selectedTile);
-      if (document.activeElement?.classList.contains('tile-hit')) document.activeElement.blur();
-    }
     drag = null;
     canvas.classList.remove('is-panning');
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -341,46 +868,131 @@ if (typeof document !== 'undefined') {
   canvas.addEventListener('pointerup', finishDrag);
   canvas.addEventListener('pointercancel', finishDrag);
   canvas.addEventListener('lostpointercapture', finishDrag);
-  let frame = 0;
-  let elapsed = 0;
-  let previousTime = null;
-
   function draw(seconds) {
-    const supervisor = displayedPosition(agents[0], seconds);
-    for (const { agent, tile, button, path, nodes } of views) {
-      const position = displayedPosition(agent, seconds);
+    const positions = displayedPositions(seconds);
+    const parentFrames = new Map();
+    const anchorFrames = new Map();
+    const supervisor = positions.get(agents[0].id);
+    const supervisorRect = tileRect(agents[0], supervisor, selectedTiles.has('supervisor'));
+    for (const { agent, tile, button, path, nodes, progressTrack, progressRing, detailFrame } of views) {
+      const position = positions.get(agent.id);
+      const expanded = selectedTiles.has(agent.id);
+      const rect = tileRect(agent, position, expanded);
+      parentFrames.set(agent.id, rect);
+      const orbit = positionAt(agent, seconds, preference.matches);
+      const anchored = expanded || (tileDrag?.moved && tileDrag.agent.id === agent.id) ? position : {
+        x: position.x - (orbit.x - agent.x),
+        y: position.y - (orbit.y - agent.y),
+      };
+      anchorFrames.set(agent.id, tileRect(agent, anchored, expanded));
       tile.setAttribute('transform', `translate(${position.x} ${position.y})`);
-      const size = tileSize(agent);
-      button.style.left = `${(position.x - 4 - camera.x) / camera.width * 100}%`;
-      button.style.top = `${(position.y - 4 - camera.y) / camera.height * 100}%`;
-      button.style.width = `${(size + 8) / camera.width * 100}%`;
-      button.style.height = `${(size + 8) / camera.height * 100}%`;
+      const outline = tile.querySelector('.tile-outline');
+      outline.setAttribute('x', rect.x - position.x + outlineInset);
+      outline.setAttribute('y', rect.y - position.y + outlineInset);
+      outline.setAttribute('width', rect.width - outlineInset * 2);
+      outline.setAttribute('height', rect.height - outlineInset * 2);
+      if (expanded) {
+        detailFrame.setAttribute('x', rect.x - position.x);
+        detailFrame.setAttribute('y', rect.y - position.y);
+        detailFrame.setAttribute('width', rect.width);
+        detailFrame.setAttribute('height', rect.height);
+      }
+      button.style.left = `${(rect.x - 4 - camera.x) / camera.width * 100}%`;
+      button.style.top = `${(rect.y - 4 - camera.y) / camera.height * 100}%`;
+      button.style.width = `${(rect.width + 8) / camera.width * 100}%`;
+      button.style.height = `${(rect.height + 8) / camera.height * 100}%`;
       if (!path) continue;
-      const connection = connectionAt(agent, position, supervisor);
+      const connection = connectionAt(agent, position, supervisor, rect, supervisorRect);
       path.setAttribute('d', connection.path);
       [connection.start, connection.end].forEach((point, index) => {
         nodes[index].setAttribute('cx', point.x);
         nodes[index].setAttribute('cy', point.y);
       });
+      const receivingNode = mockFlowDirection(agent.id, mockStates.get(agent.id).taskIndex) === 'from-supervisor'
+        ? connection.start : connection.end;
+      for (const ring of [progressTrack, progressRing]) {
+        ring.setAttribute('cx', receivingNode.x);
+        ring.setAttribute('cy', receivingNode.y);
+      }
     }
+    const baseChildren = layoutSubtiles(anchorFrames, manualSubtileOffsets,
+      subtileDrag?.moved ? { id: subtileDrag.item.id, center: subtileDrag.center } : null);
+    const targets = new Map(submenuItems.map(item => {
+      const base = baseChildren.get(item.id);
+      const drift = subtileDrag?.moved && subtileDrag.item.id === item.id ? { x: 0, y: 0 }
+        : subtileFloatAt(item, seconds, preference.matches);
+      return [item.id, { x: base.x + drift.x, y: base.y + drift.y }];
+    }));
+    const delta = lastSubtileDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastSubtileDrawSeconds));
+    const childPositions = settleSubtilePositions(targets, lastSubtilePositions, parentFrames, delta,
+      subtileDrag?.moved ? subtileDrag.item.id : null, preference.matches);
+    lastSubtileDrawSeconds = seconds;
+    lastSubtilePositions = childPositions;
+    lastParentAnchorFrames = anchorFrames;
+    for (const { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing } of subtileViews) {
+      const center = childPositions.get(item.id);
+      group.setAttribute('transform', `translate(${center.x} ${center.y})`);
+      const connection = subtileConnectionAt(parentFrames.get(item.parentId), center);
+      line.setAttribute('d', connection.path);
+      for (const [node, point] of [[parentNode, connection.start], [childNode, connection.end]]) {
+        node.setAttribute('cx', point.x);
+        node.setAttribute('cy', point.y);
+      }
+      const receiving = line.dataset.direction === 'from-parent' ? connection.end : connection.start;
+      for (const ring of [progressTrack, progressRing]) {
+        ring.setAttribute('cx', receiving.x);
+        ring.setAttribute('cy', receiving.y);
+      }
+      button.style.left = `${(center.x - subtileRadius - 4 - camera.x) / camera.width * 100}%`;
+      button.style.top = `${(center.y - subtileRadius - 4 - camera.y) / camera.height * 100}%`;
+      button.style.width = `${(subtileRadius * 2 + 8) / camera.width * 100}%`;
+      button.style.height = `${(subtileRadius * 2 + 8) / camera.height * 100}%`;
+    }
+    positionTooltip();
+  }
+
+  function tick(seconds) {
+    elapsed += seconds;
+    let changed = false;
+    for (const state of mockStates.values()) {
+      if (advanceMockTaskState(state, seconds)) changed = true;
+    }
+    if (changed) syncMockConnections();
+    syncSubtileFlows();
+    for (const view of views) updateProgress(view);
+    draw(elapsed);
   }
 
   function animate(now) {
-    if (previousTime !== null) elapsed += (now - previousTime) / 1000;
+    const delta = previousTime === null ? 0 : Math.min(1, Math.max(0, (now - previousTime) / 1000));
     previousTime = now;
-    draw(elapsed);
+    tick(delta);
     frame = requestAnimationFrame(animate);
   }
 
   function syncMotion() {
     cancelAnimationFrame(frame);
+    clearInterval(mockTimer);
     previousTime = null;
     draw(elapsed);
-    // Hidden tabs do no animation work; reduced-motion uses the static design.
-    if (!preference.matches && !document.hidden) frame = requestAnimationFrame(animate);
+    // Hidden tabs pause the mock. Reduced motion keeps progress without floating.
+    if (document.hidden) return;
+    if (preference.matches) mockTimer = window.setInterval(() => tick(0.25), 250);
+    else frame = requestAnimationFrame(animate);
   }
 
   preference.addEventListener('change', syncMotion);
   document.addEventListener('visibilitychange', syncMotion);
+  window.addEventListener('resize', () => {
+    const center = { x: camera.x + camera.width / 2, y: camera.y + camera.height / 2 };
+    const relativeZoom = initialCamera.width / camera.width;
+    Object.assign(initialCamera, cameraForViewport());
+    camera.width = initialCamera.width / relativeZoom;
+    camera.height = camera.width * initialCamera.height / initialCamera.width;
+    camera.x = center.x - camera.width / 2;
+    camera.y = center.y - camera.height / 2;
+    updateCamera();
+  });
+  updateCamera();
   syncMotion();
 }

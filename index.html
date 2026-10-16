@@ -13,9 +13,9 @@
   <body>
     <main class="graph-canvas" aria-label="에이전트 연결 구조 시안">
       <h1 class="visually-hidden">Multi-Agent Swarm Orchestrator and Supervisor Graph</h1>
-      <svg class="graph-resource" viewBox="-232 102 1920 1080" xmlns="http://www.w3.org/2000/svg" role="group" aria-labelledby="graph-title graph-description">
-        <title id="graph-title">슈퍼바이저와 6개 전문 에이전트</title>
-        <desc id="graph-description">중앙 슈퍼바이저와 품질·설비·안전·생산·에너지·물류 에이전트가 모두 연결된 목업입니다. 여섯 에이전트의 정보가 흰색 점선을 따라 슈퍼바이저로 이동합니다. 타일을 드래그해 이동하면 직선 연결선과 노드가 따라 움직이고, 다른 타일과 겹치면 가까운 빈 위치에 놓입니다. 마우스 휠로 확대·축소하고 빈 곳을 드래그해 화면을 이동할 수 있습니다. 실제 연결 상태를 나타내는 화면은 아닙니다.</desc>
+      <svg class="graph-resource" viewBox="-232 102 1920 1080" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="슈퍼바이저와 6개 전문 에이전트" aria-describedby="graph-description submenu-description">
+        <desc id="graph-description">중앙 슈퍼바이저와 품질·설비·안전·생산·에너지·물류 에이전트가 연결된 목업입니다. 각 전문 에이전트는 과업 진행률이 0에서 100퍼센트까지 천천히 오르고, 정보가 도착하는 쪽 노드의 원형 프로그래스 바도 같은 진행률과 타일 색상으로 채워집니다. 흰색 점선은 과업에 따라 전문 에이전트에서 슈퍼바이저로 또는 슈퍼바이저에서 전문 에이전트로 이동합니다. 다음 과업 전 잠시 연결선과 노드가 비활성화되고 드물게 전문 에이전트 자체가 비활성화되기도 합니다. 작업 중에는 선택되지 않은 연결 타일이 1초 주기로 점멸합니다. 여러 타일을 동시에 선택할 수 있으며 선택한 타일은 정보 표시용 도형으로 확장되고 점멸과 부유가 멈춥니다. 확장된 타일을 다시 클릭하면 그 타일만 접히고 빈 곳을 클릭해도 열린 상태를 유지합니다. 겹칠 수 있는 타일은 서로 밀려납니다. 타일을 드래그해 이동하면 직선 연결선과 노드가 따라 움직입니다. 마우스 휠로 확대·축소하고 빈 곳을 드래그해 화면을 이동할 수 있습니다. 좌측 하단의 초기 배치 버튼으로 타일과 화면을 원래 상태로 돌릴 수 있습니다. 실제 연결 상태를 나타내는 화면은 아닙니다.</desc>
+        <desc id="submenu-description">슈퍼바이저 주위에 6개 전문 에이전트를 펼쳐 배치하고, 그 바깥에 3단계 하위 메뉴를 나타내는 원형 아이콘 타일 25개를 배치했습니다. 원형 타일은 드래그해 옮기거나 클릭해 선택할 수 있지만 정보 카드로 확장되지는 않습니다. 전문 에이전트와 원형 타일 사이의 흰색 이동 점선은 현재 정보를 주고받는 방향을 나타냅니다. 작업 중에는 같은 부모의 하위 타일이 차례로 송수신하며, 쉬거나 비활성화되면 선과 노드가 회색 실선으로 바뀝니다.</desc>
         <g class="connections">
           <g data-connection="quality" data-connected="true">
             <path d="M 516.17 529.75 L 658.83 581.25" stroke-dasharray="4 8" />
@@ -36,38 +36,39 @@
             <path d="M 939.83 754.25 L 797.17 702.75" stroke-dasharray="4 8" />
           </g>
         </g>
+        <g class="subtile-links" aria-hidden="true"></g>
         <g data-agent="quality" transform="translate(448 470)" data-selected="false">
-          <title>품질</title>
           <image href="./assets/quality.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#2CB4A8" />
         </g>
         <g data-agent="supervisor" transform="translate(657 571)" data-selected="false">
-          <title>슈퍼바이저</title>
-          <image href="./assets/supervisor.svg" width="142" height="142" overflow="visible" />
+          <rect class="supervisor-compact-fill" x="1" y="1" width="140" height="140" rx="14" ry="14" fill="#9A69C7" fill-opacity="0.3" pointer-events="none" />
+          <image href="./assets/supervisor-compact.svg" width="142" height="142" overflow="visible" />
+          <g class="supervisor-compact-stats" aria-hidden="true">
+            <g data-stat-card="running" transform="translate(7 101)"><rect width="30" height="30" rx="5" /><text data-compact-stat="running" x="15" y="20" text-anchor="middle">6</text></g>
+            <g data-stat-card="pending" transform="translate(40 101)"><rect width="30" height="30" rx="5" /><text data-compact-stat="pending" x="15" y="20" text-anchor="middle">2</text></g>
+            <g data-stat-card="bottleneck" transform="translate(73 101)"><rect width="30" height="30" rx="5" /><text data-compact-stat="bottleneck" x="15" y="20" text-anchor="middle">0</text></g>
+            <g data-stat-card="resolved" transform="translate(106 101)"><rect width="30" height="30" rx="5" /><text data-compact-stat="resolved" x="15" y="20" text-anchor="middle">200</text></g>
+          </g>
           <rect class="tile-outline" x="1" y="1" width="140" height="140" rx="14" ry="14" stroke="#9A69C7" />
         </g>
         <g data-agent="production" transform="translate(938 470)" data-selected="false">
-          <title>생산</title>
           <image href="./assets/production.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#4D84C7" />
         </g>
         <g data-agent="equipment" transform="translate(448 607)" data-selected="false">
-          <title>설비</title>
           <image href="./assets/equipment.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#C87945" />
         </g>
         <g data-agent="safety" transform="translate(448 744)" data-selected="false">
-          <title>안전</title>
           <image href="./assets/safety.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#57B96A" />
         </g>
         <g data-agent="energy" transform="translate(938 607)" data-selected="false">
-          <title>에너지</title>
           <image href="./assets/energy.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#B9BD3E" />
         </g>
         <g data-agent="logistics" transform="translate(938 744)" data-selected="false">
-          <title>물류</title>
           <image href="./assets/logistics.svg" width="70" height="70" overflow="visible" />
           <rect class="tile-outline" x="1" y="1" width="68" height="68" rx="14" ry="14" stroke="#C55F91" />
         </g>
@@ -97,6 +98,7 @@
             <circle cx="797.17" cy="702.75" r="3" />
           </g>
         </g>
+        <g class="subtiles" aria-hidden="true"></g>
       </svg>
       <div class="tile-controls" role="group" aria-label="에이전트 선택">
         <button class="tile-hit" type="button" data-tile-control="quality" aria-label="품질 에이전트 타일" aria-pressed="false"></button>
@@ -107,6 +109,40 @@
         <button class="tile-hit" type="button" data-tile-control="energy" aria-label="에너지 에이전트 타일" aria-pressed="false"></button>
         <button class="tile-hit" type="button" data-tile-control="logistics" aria-label="물류 에이전트 타일" aria-pressed="false"></button>
       </div>
+      <div class="tile-tooltip" aria-hidden="true" hidden></div>
+      <section class="agent-details" id="agent-details" aria-label="선택한 에이전트 정보" hidden>
+        <header class="agent-details__header">
+          <img class="agent-details__icon" alt="" />
+          <div class="agent-details__heading">
+            <p class="agent-details__role" hidden></p>
+            <h2 class="agent-details__title"></h2>
+          </div>
+          <span class="agent-details__status"></span>
+        </header>
+        <div class="agent-details__specialist">
+          <p class="agent-details__task"></p>
+          <div class="agent-details__progress" role="progressbar" aria-label="작업 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+          <div class="agent-details__meta">
+            <span class="agent-details__models"></span>
+            <span class="agent-details__count"></span>
+          </div>
+        </div>
+        <div class="agent-details__supervisor" hidden>
+          <div class="agent-details__stats">
+            <div data-stat-card="running"><strong data-stat="running"></strong><span>진행 중</span></div>
+            <div data-stat-card="pending"><strong data-stat="pending"></strong><span>승인 대기</span></div>
+            <div data-stat-card="bottleneck"><strong data-stat="bottleneck">0</strong><span>병목</span></div>
+            <div data-stat-card="resolved"><strong data-stat="resolved">200</strong><span>해결됨</span></div>
+          </div>
+          <p class="agent-details__summary"></p>
+        </div>
+      </section>
+      <button class="reset-layout" type="button" aria-label="타일과 화면을 초기 배치로 되돌리기" title="초기 배치">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+          <path d="M3 3v5h5" />
+        </svg>
+      </button>
     </main>
   </body>
 </html>
