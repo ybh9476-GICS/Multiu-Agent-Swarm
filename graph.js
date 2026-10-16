@@ -1,4 +1,5 @@
-import { expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuIconPaths, submenuItems, subtileBounds, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
+import { advanceSubtileStatusState, createSubtileStatusState, expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuIconPaths, submenuItems, subtileBounds, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
+import { createFourthLevelItems, fourthBounds, fourthConnectionAt, fourthDetailSize, fourthFloatAt, fourthRadius, layoutFourthLevelItems, settleFourthLevelPositions } from './fourth-tiles.js';
 
 // Tile artwork follows OpenPencil: Page 1 / Section 2; positions form the three-level mock.
 export const agents = [
@@ -230,20 +231,22 @@ export function settleAgentPositions(targets, previous, items, selectedIds, delt
   const clearance = 26;
   for (let pass = 0; pass < 8; pass++) {
     if (approachingSubtile) {
-      for (const agent of items) {
-        if (selectedSet.has(agent.id)) continue;
-        const position = positions.get(agent.id);
-        const rect = tileRect(agent, position);
-        const gapX = Math.min(rect.x + rect.width + clearance - approachingSubtile.x,
-          approachingSubtile.x + approachingSubtile.width + clearance - rect.x);
-        const gapY = Math.min(rect.y + rect.height + clearance - approachingSubtile.y,
-          approachingSubtile.y + approachingSubtile.height + clearance - rect.y);
-        if (gapX <= 0 || gapY <= 0) continue;
-        const axis = gapX < gapY ? 'x' : 'y';
-        const agentCenter = rect[axis] + rect[axis === 'x' ? 'width' : 'height'] / 2;
-        const subtileCenter = approachingSubtile[axis] +
-          approachingSubtile[axis === 'x' ? 'width' : 'height'] / 2;
-        position[axis] += (agentCenter >= subtileCenter ? 1 : -1) * (axis === 'x' ? gapX : gapY);
+      const approaching = Array.isArray(approachingSubtile) ? approachingSubtile : [approachingSubtile];
+      for (const obstacle of approaching) {
+        for (const agent of items) {
+          if (selectedSet.has(agent.id)) continue;
+          const position = positions.get(agent.id);
+          const rect = tileRect(agent, position);
+          const gapX = Math.min(rect.x + rect.width + clearance - obstacle.x,
+            obstacle.x + obstacle.width + clearance - rect.x);
+          const gapY = Math.min(rect.y + rect.height + clearance - obstacle.y,
+            obstacle.y + obstacle.height + clearance - rect.y);
+          if (gapX <= 0 || gapY <= 0) continue;
+          const axis = gapX < gapY ? 'x' : 'y';
+          const agentCenter = rect[axis] + rect[axis === 'x' ? 'width' : 'height'] / 2;
+          const subtileCenter = obstacle[axis] + obstacle[axis === 'x' ? 'width' : 'height'] / 2;
+          position[axis] += (agentCenter >= subtileCenter ? 1 : -1) * (axis === 'x' ? gapX : gapY);
+        }
       }
     }
     for (let i = 0; i < items.length; i++) {
@@ -365,7 +368,11 @@ if (typeof document !== 'undefined') {
     tooltip.style.top = `${Math.max(4, Math.min(canvasRect.height - tooltip.offsetHeight - 4, top))}px`;
   }
   function showTileTooltip(button, label, event) {
-    if (tileDrag?.moved || subtileDrag?.moved) return;
+    if (tileDrag?.moved || subtileDrag?.moved || fourthDrag?.moved) return;
+    if (button.getAttribute('aria-expanded') === 'true') {
+      hideTileTooltip();
+      return;
+    }
     if (tooltipButton !== button) tooltipPointer = null;
     tooltipButton = button;
     tooltip.textContent = label;
@@ -391,8 +398,8 @@ if (typeof document !== 'undefined') {
     const viewport = controls.getBoundingClientRect();
     const width = viewport.width || window.innerWidth || 1;
     const height = viewport.height || window.innerHeight || 1;
-    const zoom = Math.max(1, Math.min(1.32, height / width / (baseHeight / baseWidth)));
-    const viewWidth = baseWidth / zoom;
+    const zoom = Math.max(1, Math.min(1.32, height / width / (baseHeight / baseWidth))) * 0.9;
+    const viewWidth = Math.max(baseWidth / zoom, 1200 * width / height);
     const viewHeight = viewWidth * height / width;
     return {
       x: (bounds.left + bounds.right - viewWidth) / 2,
@@ -451,6 +458,8 @@ if (typeof document !== 'undefined') {
   const fixedSubtilePositions = new Map();
   const manualSubtileOffsets = new Map();
   const suppressedSubtileClicks = new Set();
+  const subtileStatusStates = new Map(submenuItems.map(item =>
+    [item.id, createSubtileStatusState(item.id)]));
   const subtileViews = submenuItems.map(item => {
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     line.dataset.subtileLink = item.id;
@@ -494,10 +503,15 @@ if (typeof document !== 'undefined') {
     title.textContent = item.label;
     heading.append(parentLabel, title);
     header.append(emblem, heading);
-    const summary = document.createElement('p');
-    summary.className = 'subtile-details__summary';
-    summary.textContent = item.summary;
-    detail.append(header, summary);
+    const status = document.createElement('div');
+    status.className = 'subtile-details__status';
+    const statusText = document.createElement('strong');
+    statusText.className = 'subtile-details__status-value';
+    statusText.textContent = subtileStatusStates.get(item.id).text;
+    const statusMeta = document.createElement('small');
+    statusMeta.className = 'subtile-details__status-meta';
+    status.append(statusText, statusMeta);
+    detail.append(header, status);
     detailFrame.append(detail);
     group.append(circle, icon, detailFrame);
     subtileLayer.append(group);
@@ -557,7 +571,79 @@ if (typeof document !== 'undefined') {
     button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, item.label); });
     button.addEventListener('blur', () => { button.classList.remove('is-pointer-focused'); group.dataset.hover = 'false'; hideTileTooltip(button); });
     button.addEventListener('keydown', () => button.classList.remove('is-pointer-focused'));
-    return { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing };
+    return { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing,
+      statusText, statusMeta };
+  });
+  const fourthItems = createFourthLevelItems(submenuItems);
+  const fourthLinks = document.querySelector('.fourth-links');
+  const fourthLayer = document.querySelector('.fourth-tiles');
+  const selectedFourthTiles = new Set();
+  const fixedFourthPositions = new Map();
+  const manualFourthOffsets = new Map();
+  const suppressedFourthClicks = new Set();
+  const fourthViews = fourthItems.map(item => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.dataset.fourthLink = item.id;
+    line.dataset.connected = 'false';
+    fourthLinks.append(line);
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.dataset.fourth = item.id;
+    group.dataset.parent = item.parentId;
+    group.dataset.connected = 'false';
+    group.dataset.selected = 'false';
+    group.dataset.hover = 'false';
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.classList.add('fourth-circle');
+    circle.setAttribute('r', String(fourthRadius));
+    const detail = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    detail.classList.add('fourth-detail');
+    detail.setAttribute('x', String(-fourthDetailSize.width / 2));
+    detail.setAttribute('y', String(-fourthDetailSize.height / 2));
+    detail.setAttribute('width', String(fourthDetailSize.width));
+    detail.setAttribute('height', String(fourthDetailSize.height));
+    detail.setAttribute('rx', '8');
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.classList.add('fourth-detail-label');
+    label.textContent = 'unknown';
+    group.append(circle, detail, label);
+    fourthLayer.append(group);
+    const button = document.createElement('button');
+    button.className = 'fourth-hit';
+    button.type = 'button';
+    button.dataset.fourthControl = item.id;
+    button.setAttribute('aria-label', 'unknown');
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-expanded', 'false');
+    controls.append(button);
+    button.addEventListener('click', event => {
+      if (suppressedFourthClicks.has(item.id)) {
+        event.preventDefault();
+        return;
+      }
+      const selected = !selectedFourthTiles.has(item.id);
+      const center = lastFourthPositions.get(item.id);
+      if (selected) {
+        if (center) fixedFourthPositions.set(item.id, { ...center });
+        selectedFourthTiles.add(item.id);
+      } else {
+        selectedFourthTiles.delete(item.id);
+        fixedFourthPositions.delete(item.id);
+        const parent = lastSubtilePositions.get(item.parentId);
+        if (center && parent) manualFourthOffsets.set(item.id, {
+          x: center.x - parent.x, y: center.y - parent.y,
+        });
+      }
+      group.dataset.selected = String(selected);
+      button.setAttribute('aria-pressed', String(selected));
+      button.setAttribute('aria-expanded', String(selected));
+      draw(elapsed);
+    });
+    button.addEventListener('pointerenter', event => { group.dataset.hover = 'true'; showTileTooltip(button, 'unknown', event); });
+    button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
+    button.addEventListener('pointerleave', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, 'unknown'); });
+    button.addEventListener('blur', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    return { item, line, group, button };
   });
   const peerLinksLayer = document.querySelector('.peer-links');
   const peerNodesLayer = document.querySelector('.peer-nodes');
@@ -659,11 +745,14 @@ if (typeof document !== 'undefined') {
   let drag = null;
   let tileDrag = null;
   let subtileDrag = null;
+  let fourthDrag = null;
   let lastAgentPositions = new Map();
   let lastAgentDrawSeconds = null;
   let lastSubtilePositions = new Map();
   let lastParentAnchorFrames = new Map();
   let lastSubtileDrawSeconds = null;
+  let lastFourthPositions = new Map();
+  let lastFourthDrawSeconds = null;
   let frame = 0;
   let mockTimer = 0;
   let elapsed = 0;
@@ -672,10 +761,16 @@ if (typeof document !== 'undefined') {
   function displayedPositions(seconds, deltaSeconds = 0) {
     const dragged = tileDrag?.moved ? { id: tileDrag.agent.id, position: tileDrag.position } : null;
     const targets = resolveTilePositions(agents, selectedTiles, seconds, preference.matches, dragged, fixedSelectedPositions);
-    const subtileObstacle = subtileDrag?.moved
-      ? subtileBounds(subtileDrag.center, selectedSubtiles.has(subtileDrag.item.id)) : null;
+    const subtileObstacles = [
+      ...(subtileDrag?.moved ? [subtileBounds(subtileDrag.center,
+        selectedSubtiles.has(subtileDrag.item.id))] : []),
+      ...[...selectedFourthTiles].map(id => fixedFourthPositions.get(id))
+        .filter(Boolean).map(center => fourthBounds(center, true)),
+      ...(fourthDrag?.moved && !selectedFourthTiles.has(fourthDrag.item.id)
+        ? [fourthBounds(fourthDrag.center)] : []),
+    ];
     return settleAgentPositions(targets, lastAgentPositions, agents, selectedTiles,
-      deltaSeconds, dragged?.id, preference.matches, subtileObstacle);
+      deltaSeconds, dragged?.id, preference.matches, subtileObstacles);
   }
 
   function worldAt(clientX, clientY) {
@@ -772,6 +867,22 @@ if (typeof document !== 'undefined') {
     }
   }
 
+  function syncSubtileStatuses(seconds = 0) {
+    for (const { item, statusText, statusMeta } of subtileViews) {
+      const online = mockTileActive(mockStates.get(item.parentId));
+      const state = subtileStatusStates.get(item.id);
+      const updated = online && advanceSubtileStatusState(state, seconds);
+      if (updated) statusText.textContent = state.text;
+      if (!updated && statusMeta.dataset.online === String(online)) continue;
+      statusMeta.dataset.online = String(online);
+      statusMeta.textContent = online
+        ? `목업 · ${new Date(state.receivedAt).toLocaleTimeString('ko-KR', {
+          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+        })}`
+        : '목업 · 연결 끊김';
+    }
+  }
+
   function setPeerFlow(view, connected, direction, progress, color) {
     const active = String(connected);
     if (view.line.dataset.connected !== active) view.line.dataset.connected = active;
@@ -813,6 +924,7 @@ if (typeof document !== 'undefined') {
 
   syncMockConnections();
   syncSubtileFlows();
+  syncSubtileStatuses();
   syncPeerFlows();
 
   function updateCamera() {
@@ -949,11 +1061,27 @@ if (typeof document !== 'undefined') {
       button.setAttribute('aria-pressed', 'false');
       button.setAttribute('aria-expanded', 'false');
     }
+    selectedFourthTiles.clear();
+    fixedFourthPositions.clear();
+    manualFourthOffsets.clear();
+    if (fourthDrag) {
+      const { button, pointerId } = fourthDrag;
+      fourthDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(pointerId)) button.releasePointerCapture(pointerId);
+    }
+    for (const { group, button } of fourthViews) {
+      group.dataset.selected = 'false';
+      button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-expanded', 'false');
+    }
     clearSelections(false);
     elapsed = 0;
     previousTime = null;
     lastSubtilePositions = new Map();
     lastSubtileDrawSeconds = null;
+    lastFourthPositions = new Map();
+    lastFourthDrawSeconds = null;
     lastAgentPositions = new Map();
     lastAgentDrawSeconds = null;
     updateCamera();
@@ -963,7 +1091,7 @@ if (typeof document !== 'undefined') {
     const { agent, tile, button } = view;
     let suppressClick = false;
     button.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || tileDrag) return;
+      if (event.button !== 0 || tileDrag || subtileDrag || fourthDrag) return;
       const viewport = controls.getBoundingClientRect();
       if (!viewport.width || !viewport.height) return;
       const pointer = worldAt(event.clientX, event.clientY);
@@ -1059,7 +1187,7 @@ if (typeof document !== 'undefined') {
 
   for (const { item, button } of subtileViews) {
     button.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || subtileDrag || tileDrag) return;
+      if (event.button !== 0 || subtileDrag || tileDrag || fourthDrag) return;
       const center = lastSubtilePositions.get(item.id);
       if (!center) return;
       button.classList.add('is-pointer-focused');
@@ -1113,6 +1241,63 @@ if (typeof document !== 'undefined') {
     button.addEventListener('pointerup', finishSubtileDrag);
     button.addEventListener('pointercancel', finishSubtileDrag);
     button.addEventListener('lostpointercapture', finishSubtileDrag);
+  }
+
+  for (const { item, button } of fourthViews) {
+    button.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || tileDrag || subtileDrag || fourthDrag) return;
+      const center = lastFourthPositions.get(item.id);
+      if (!center) return;
+      button.classList.add('is-pointer-focused');
+      const pointer = worldAt(event.clientX, event.clientY);
+      fourthDrag = {
+        item, button, pointerId: event.pointerId,
+        startClientX: event.clientX, startClientY: event.clientY,
+        grabX: pointer.x - center.x, grabY: pointer.y - center.y,
+        center: { ...center }, moved: false,
+      };
+      button.setPointerCapture(event.pointerId);
+    });
+    window.addEventListener('pointermove', event => {
+      if (!fourthDrag || fourthDrag.button !== button || fourthDrag.pointerId !== event.pointerId) return;
+      if (!fourthDrag.moved && Math.hypot(event.clientX - fourthDrag.startClientX,
+        event.clientY - fourthDrag.startClientY) < 4) return;
+      fourthDrag.moved = true;
+      hideTileTooltip(button);
+      button.classList.add('is-dragging');
+      const pointer = worldAt(event.clientX, event.clientY);
+      fourthDrag.center = { x: pointer.x - fourthDrag.grabX, y: pointer.y - fourthDrag.grabY };
+      if (selectedFourthTiles.has(item.id)) fixedFourthPositions.set(item.id, fourthDrag.center);
+      draw(elapsed);
+      event.preventDefault();
+    });
+    function finishFourthDrag(event) {
+      if (!fourthDrag || fourthDrag.button !== button || fourthDrag.pointerId !== event.pointerId) return;
+      if (fourthDrag.moved) {
+        const center = lastFourthPositions.get(item.id);
+        const parent = lastSubtilePositions.get(item.parentId);
+        if (center && parent) manualFourthOffsets.set(item.id, {
+          x: center.x - parent.x, y: center.y - parent.y,
+        });
+        // Retain the space made by the dragged child after releasing it.
+        for (const agent of agents) {
+          if (selectedTiles.has(agent.id)) continue;
+          const visible = lastAgentPositions.get(agent.id);
+          const floating = positionAt(agent, elapsed, preference.matches);
+          agent.x += visible.x - floating.x;
+          agent.y += visible.y - floating.y;
+        }
+        suppressedFourthClicks.add(item.id);
+        setTimeout(() => suppressedFourthClicks.delete(item.id), 0);
+      }
+      fourthDrag = null;
+      button.classList.remove('is-dragging');
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+      draw(elapsed);
+    }
+    window.addEventListener('pointerup', finishFourthDrag);
+    window.addEventListener('pointercancel', finishFourthDrag);
+    button.addEventListener('lostpointercapture', finishFourthDrag);
   }
 
   canvas.addEventListener('wheel', event => {
@@ -1170,6 +1355,7 @@ if (typeof document !== 'undefined') {
   canvas.addEventListener('pointercancel', finishDrag);
   canvas.addEventListener('lostpointercapture', finishDrag);
   function draw(seconds) {
+    if (tooltipButton?.getAttribute('aria-expanded') === 'true') hideTileTooltip();
     const agentDelta = lastAgentDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastAgentDrawSeconds));
     const positions = displayedPositions(seconds, agentDelta);
     lastAgentPositions = positions;
@@ -1242,7 +1428,15 @@ if (typeof document !== 'undefined') {
         ? { ...fixedSubtilePositions.get(item.id) } : { x: base.x + drift.x, y: base.y + drift.y }];
     }));
     const delta = lastSubtileDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastSubtileDrawSeconds));
-    const childPositions = settleSubtilePositions(targets, lastSubtilePositions, parentFrames, delta,
+    const subtileObstacles = new Map(parentFrames);
+    for (const id of selectedFourthTiles) {
+      const center = fixedFourthPositions.get(id);
+      if (center) subtileObstacles.set(`fourth-${id}`, fourthBounds(center, true));
+    }
+    if (fourthDrag?.moved && !selectedFourthTiles.has(fourthDrag.item.id)) {
+      subtileObstacles.set('fourth-drag', fourthBounds(fourthDrag.center));
+    }
+    const childPositions = settleSubtilePositions(targets, lastSubtilePositions, subtileObstacles, delta,
       subtileDrag?.moved ? subtileDrag.item.id : null, preference.matches, selectedSubtiles);
     for (const id of selectedSubtiles) fixedSubtilePositions.set(id, { ...childPositions.get(id) });
     lastSubtileDrawSeconds = seconds;
@@ -1289,6 +1483,47 @@ if (typeof document !== 'undefined') {
       placePeerView(view, subtilePeerConnectionAt(childPositions.get(view.first.id), childPositions.get(view.second.id),
         selectedSubtiles.has(view.first.id), selectedSubtiles.has(view.second.id)));
     }
+    const fourthObstacles = [
+      ...parentFrames.values(),
+      ...submenuItems.map(item => subtileBounds(childPositions.get(item.id), selectedSubtiles.has(item.id))),
+    ];
+    const fourthBase = layoutFourthLevelItems(fourthItems, childPositions, selectedSubtiles,
+      fourthObstacles, { x: supervisorRect.x + supervisorRect.width / 2,
+        y: supervisorRect.y + supervisorRect.height / 2 });
+    const fourthTargets = new Map(fourthItems.map(item => {
+      const base = fourthBase.get(item.id);
+      const parent = childPositions.get(item.parentId);
+      const offset = manualFourthOffsets.get(item.id);
+      const drift = fourthFloatAt(item, seconds, preference.matches);
+      const dragged = fourthDrag?.moved && fourthDrag.item.id === item.id;
+      const fixed = fixedFourthPositions.get(item.id);
+      return [item.id, dragged ? { ...fourthDrag.center }
+        : selectedFourthTiles.has(item.id) && fixed ? { ...fixed }
+          : offset ? { x: parent.x + offset.x + drift.x, y: parent.y + offset.y + drift.y }
+            : { x: base.x + drift.x, y: base.y + drift.y }];
+    }));
+    const fourthDelta = lastFourthDrawSeconds === null ? 0
+      : Math.min(0.05, Math.max(0, seconds - lastFourthDrawSeconds));
+    const fourthPositions = settleFourthLevelPositions(fourthTargets, lastFourthPositions,
+      fourthObstacles, fourthDelta, fourthDrag?.moved ? fourthDrag.item.id : null,
+      preference.matches, selectedFourthTiles);
+    for (const id of selectedFourthTiles) fixedFourthPositions.set(id, { ...fourthPositions.get(id) });
+    lastFourthPositions = fourthPositions;
+    lastFourthDrawSeconds = seconds;
+    for (const { item, line, group, button } of fourthViews) {
+      const center = fourthPositions.get(item.id);
+      const parent = childPositions.get(item.parentId);
+      const expanded = selectedFourthTiles.has(item.id);
+      const bounds = fourthBounds(center, expanded);
+      group.setAttribute('transform', `translate(${center.x} ${center.y})`);
+      line.setAttribute('d', fourthConnectionAt(parent, center,
+        selectedSubtiles.has(item.parentId), expanded).path);
+      button.style.left = `${(bounds.x - 4 - camera.x) / camera.width * 100}%`;
+      button.style.top = `${(bounds.y - 4 - camera.y) / camera.height * 100}%`;
+      button.style.width = `${(bounds.width + 8) / camera.width * 100}%`;
+      button.style.height = `${(bounds.height + 8) / camera.height * 100}%`;
+      button.style.borderRadius = expanded ? '8px' : '50%';
+    }
     positionTooltip();
   }
 
@@ -1300,6 +1535,7 @@ if (typeof document !== 'undefined') {
     }
     if (changed) syncMockConnections();
     syncSubtileFlows();
+    syncSubtileStatuses(seconds);
     syncPeerFlows();
     for (const view of views) updateProgress(view);
     draw(elapsed);

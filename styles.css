@@ -102,6 +102,8 @@ body {
 .peer-links,
 .peer-nodes,
 .subtile-links,
+.fourth-links,
+.fourth-tiles,
 .subtiles {
   pointer-events: none;
 }
@@ -160,6 +162,49 @@ body {
   animation-name: flow-dash-reverse;
 }
 
+.fourth-links path {
+  fill: none;
+  stroke: #4c4e53;
+  stroke-width: 1.3;
+}
+
+.fourth-circle,
+.fourth-detail {
+  fill: rgb(76 78 83 / 30%);
+  stroke: #4c4e53;
+  stroke-width: 1.8;
+}
+
+.fourth-tiles [data-hover="true"] .fourth-circle,
+.fourth-tiles [data-hover="true"] .fourth-detail {
+  fill: rgb(76 78 83 / 50%);
+  filter: drop-shadow(0 0 5px rgb(180 184 192 / 40%));
+}
+
+.fourth-detail,
+.fourth-detail-label,
+.fourth-tiles [data-selected="true"] .fourth-circle {
+  display: none;
+}
+
+.fourth-tiles [data-selected="true"] .fourth-detail,
+.fourth-tiles [data-selected="true"] .fourth-detail-label {
+  display: block;
+}
+
+.fourth-tiles [data-selected="true"] .fourth-detail {
+  fill: rgb(76 78 83 / 55%);
+  stroke: #777b83;
+  filter: drop-shadow(0 0 6px rgb(130 134 144 / 35%));
+}
+
+.fourth-detail-label {
+  fill: #c0c3c9;
+  font: 11px system-ui, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
 .subtile-circle {
   fill: color-mix(in srgb, var(--subtile-color) 22%, #000);
   stroke: var(--subtile-color);
@@ -190,9 +235,13 @@ body {
 }
 
 .subtile-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 5px;
   width: 100%;
   height: 100%;
-  padding: 10px 11px;
+  padding: 6px 10px;
   border: 2px solid var(--subtile-color);
   border-radius: 14px;
   background: color-mix(in srgb, var(--subtile-color) 27%, #080a0d);
@@ -250,18 +299,43 @@ body {
   overflow-wrap: anywhere;
 }
 
-.subtile-details__summary {
-  margin: 9px 0 0;
-  color: #d7dce4;
+.subtile-details__status {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--subtile-color) 35%, transparent);
+  border-radius: 7px;
+  background: rgb(0 0 0 / 18%);
+}
+
+.subtile-details__status-value {
+  display: block;
+  overflow: hidden;
+  color: #f4f5f7;
   font-size: 10px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtile-details__status-meta {
+  display: block;
+  margin-top: 2px;
+  color: #b9c1cb;
+  font-size: 8px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .subtiles [data-connected="false"] .subtile-details {
   border-color: #4c4e53;
   background: #26282d;
   box-shadow: 0 0 10px rgb(76 78 83 / 35%);
+}
+
+.subtiles [data-connected="false"] .subtile-details__status {
+  border-color: #4c4e53;
 }
 
 .subtiles [data-connected="false"] .subtile-details__emblem {
@@ -402,6 +476,21 @@ body {
 }
 
 .subtile-hit.is-dragging {
+  cursor: grabbing;
+}
+
+.fourth-hit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: transparent;
+  cursor: default;
+  pointer-events: auto;
+}
+
+.fourth-hit.is-dragging {
   cursor: grabbing;
 }
 

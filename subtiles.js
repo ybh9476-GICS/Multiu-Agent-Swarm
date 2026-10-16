@@ -62,8 +62,56 @@ export const submenuItems = submenuGroups.flatMap(group => group.items.map((item
   ...item, parentId: group.agentId, side: group.side, index, count: group.items.length,
 })));
 
+// Example readings for the local mock. Measurement pages update more often than
+// record and command pages, which only change when a simulated event arrives.
+export const subtileStatusProfiles = {
+  'quality-rate': { interval: 6, samples: ['A라인 불량률 2.4% · +0.3%p', 'B라인 불량률 1.8% · -0.1%p'] },
+  'quality-vision': { interval: 7, samples: ['제품 Q-104 · 양품', '제품 Q-105 · 불량'] },
+  'quality-types': { interval: 12, samples: ['스크래치 18건 · 41%', '찍힘 16건 · 37%'] },
+  'quality-temperature': { interval: 8, samples: ['프레스-02 68℃ · 정상', '프레스-02 73℃ · 구간 이탈'] },
+  'quality-history': { interval: 24, samples: ['배치 B-2407 · 불량 4/320', '배치 B-2408 · 불량 2/306'] },
+  'equipment-status': { interval: 8, samples: ['정상 27 · 경고 2 · 위험 1', '정상 28 · 경고 1 · 위험 1'] },
+  'equipment-trend': { interval: 6, samples: ['모터-03 진동 3.2mm/s · 64℃', '모터-03 진동 3.6mm/s · 65℃'] },
+  'equipment-rul': { interval: 18, samples: ['모터-03 잔여수명 72시간', '펌프-02 잔여수명 54시간'] },
+  'equipment-order': { interval: 22, samples: ['미처리 2 · 진행 4 · 완료 18', '미처리 1 · 진행 5 · 완료 18'] },
+  'equipment-history': { interval: 26, samples: ['모터-03 보전 완료 · 42분', '펌프-02 보전 완료 · 36분'] },
+  'safety-fire': { interval: 6, samples: ['감시 24대 · 화재 의심 0건', '감시 24대 · 연기 의심 1건'] },
+  'safety-amr': { interval: 6, samples: ['운행 8대 · 근접 경고 0건', '운행 8대 · 근접 경고 1건'] },
+  'safety-stop': { interval: 18, samples: ['정지 0 · 미확인 알람 1', '정지 1 · 미확인 알람 2'] },
+  'production-line': { interval: 8, samples: ['가동 6 · 대기 1 · 정지 0', '가동 5 · 대기 1 · 정지 1'] },
+  'production-oee': { interval: 10, samples: ['오늘 OEE 82.4% · 목표 -2.6%p', '오늘 OEE 83.1% · 목표 -1.9%p'] },
+  'production-takt': { interval: 6, samples: ['현재 56초 · 목표보다 6초 지연', '현재 53초 · 목표보다 3초 지연'] },
+  'production-batch': { interval: 24, samples: ['B-2407 · 820개 · 진행 중', 'B-2407 · 1000개 · 완료'] },
+  'production-plan': { interval: 12, samples: ['계획 1200 · 실적 1110 · -90', '계획 1200 · 실적 1160 · -40'] },
+  'energy-power': { interval: 6, samples: ['현재 428kW · 직전 +12kW', '현재 416kW · 직전 -12kW'] },
+  'energy-cost': { interval: 16, samples: ['오늘 128만원 · 예산 -6%', '오늘 131만원 · 예산 -4%'] },
+  'energy-peak': { interval: 8, samples: ['최대 826kW · 여유 74kW', '최대 838kW · 여유 62kW'] },
+  'logistics-route': { interval: 9, samples: ['AMR-04 → 출하장 · 도착 3분', 'AMR-07 → 조립라인 · 도착 5분'] },
+  'logistics-buffer': { interval: 12, samples: ['사용 18/24 · 잔여 6', '사용 19/24 · 잔여 5'] },
+  'logistics-dispatch': { interval: 20, samples: ['배차 대기 2건 · D-184 수락', '배차 대기 1건 · D-185 이행'] },
+  'logistics-charge': { interval: 14, samples: ['충전 3대 · 대기 2대', '충전 4대 · 대기 1대'] },
+};
+
+export function createSubtileStatusState(id, receivedAt = Date.now()) {
+  const profile = subtileStatusProfiles[id];
+  if (!profile) throw new Error(`Unknown subtile status: ${id}`);
+  return { id, index: 0, elapsed: 0, text: profile.samples[0], receivedAt };
+}
+
+export function advanceSubtileStatusState(state, seconds, receivedAt = Date.now()) {
+  const profile = subtileStatusProfiles[state.id];
+  const total = state.elapsed + Math.max(0, seconds);
+  const updates = Math.floor(total / profile.interval);
+  state.elapsed = total % profile.interval;
+  if (!updates) return false;
+  state.index = (state.index + updates) % profile.samples.length;
+  state.text = profile.samples[state.index];
+  state.receivedAt = receivedAt;
+  return true;
+}
+
 export const subtileRadius = 22;
-export const subtileDetailSize = { width: 224, height: 100 };
+export const subtileDetailSize = { width: 224, height: 90 };
 export function subtileBounds(center, expanded = false) {
   const width = expanded ? subtileDetailSize.width : subtileRadius * 2;
   const height = expanded ? subtileDetailSize.height : subtileRadius * 2;
@@ -172,6 +220,12 @@ export function settleSubtilePositions(targets, previous, obstacles, deltaSecond
   const ids = [...positions.keys()];
   const circleDistance = subtileSize + 24;
   const tileDistance = subtileRadius + 24;
+  // Keep a small collision buffer even when the visual card is more compact.
+  const reservedCardAt = point => {
+    const height = Math.max(subtileDetailSize.height, 96);
+    return { x: point.x - subtileDetailSize.width / 2, y: point.y - height / 2,
+      width: subtileDetailSize.width, height };
+  };
   for (let pass = 0; pass < 4; pass++) {
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
@@ -182,8 +236,8 @@ export function settleSubtilePositions(targets, previous, obstacles, deltaSecond
         if (aExpanded || bExpanded) {
           // Reserve a full card around compact neighbors so selecting one later
           // does not make the newly expanded cards collide.
-          const aRect = subtileBounds(a, true);
-          const bRect = subtileBounds(b, true);
+          const aRect = reservedCardAt(a);
+          const bRect = reservedCardAt(b);
           const gapX = Math.min(aRect.x + aRect.width + 18 - bRect.x,
             bRect.x + bRect.width + 18 - aRect.x);
           const gapY = Math.min(aRect.y + aRect.height + 18 - bRect.y,
@@ -223,7 +277,7 @@ export function settleSubtilePositions(targets, previous, obstacles, deltaSecond
       if (id === draggedId) continue;
       for (const rect of obstacles.values()) {
         if (expandedIds.has(id)) {
-          const card = subtileBounds(point, true);
+          const card = reservedCardAt(point);
           const gapX = Math.min(card.x + card.width + 18 - rect.x,
             rect.x + rect.width + 18 - card.x);
           const gapY = Math.min(card.y + card.height + 18 - rect.y,

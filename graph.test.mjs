@@ -1,9 +1,110 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activeSpecialistPeer, agents, advanceMockTaskState, connectionAt, createMockTaskState, mockConnectionActive, mockFlowDirection, mockTileActive, nearestFreePosition, positionAt, resolveTilePositions, sameLevelPairs, settleAgentPositions, specialistPeerPairs, subtilePeerPairs, tileRect } from './graph.js';
-import { circleConnectionAt, expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuGroups, submenuIconPaths, submenuItems, subtileBounds, subtileConnection, subtileConnectionAt, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
+import { advanceSubtileStatusState, circleConnectionAt, createSubtileStatusState, expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuGroups, submenuIconPaths, submenuItems, subtileBounds, subtileConnection, subtileConnectionAt, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius, subtileStatusProfiles } from './subtiles.js';
+import { createFourthLevelItems, fourthBounds, fourthConnectionAt, fourthConnectionGap, fourthDetailSize, fourthFloatAt, fourthRadius, layoutFourthLevelItems, settleFourthLevelPositions } from './fourth-tiles.js';
 
 const supervisor = { x: 200, y: 200 };
+
+test('each third-level tile gets one to five stable unknown children', () => {
+  const samples = [0, 0.2, 0.4, 0.6, 0.999999];
+  let next = 0;
+  const fourth = createFourthLevelItems(submenuItems, () => samples[next++ % samples.length]);
+  assert.equal(fourth.length, 75);
+  assert.equal(new Set(fourth.map(item => item.id)).size, fourth.length);
+  for (const [index, parent] of submenuItems.entries()) {
+    const children = fourth.filter(item => item.parentId === parent.id);
+    assert.equal(children.length, index % 5 + 1);
+    assert.ok(children.every((item, childIndex) => item.index === childIndex &&
+      item.count === children.length && !('icon' in item)));
+  }
+});
+
+test('fourth-level counts and connections stay fixed across fresh page builds', () => {
+  const first = createFourthLevelItems(submenuItems);
+  const second = createFourthLevelItems(submenuItems);
+  assert.deepEqual(second, first);
+  for (const parent of submenuItems) {
+    const children = first.filter(item => item.parentId === parent.id);
+    assert.ok(children.length >= 1 && children.length <= 5);
+    assert.ok(children.every((item, index) => item.id === `${parent.id}-unknown-${index + 1}`));
+  }
+  const reordered = createFourthLevelItems([...submenuItems].reverse());
+  for (const parent of submenuItems) {
+    assert.equal(reordered.filter(item => item.parentId === parent.id).length,
+      first.filter(item => item.parentId === parent.id).length);
+  }
+});
+
+test('fourth-level circles stay clear of tiles and their gray links end at circle edges', () => {
+  const frames = new Map(agents.map(agent => [agent.id, tileRect(agent, agent)]));
+  const third = layoutSubtiles(frames);
+  const fourth = createFourthLevelItems(submenuItems, () => 0.999999);
+  const expanded = new Set(['quality-rate']);
+  const obstacles = [...frames.values(), ...submenuItems.map(item =>
+    subtileBounds(third.get(item.id), expanded.has(item.id)))];
+  const supervisorCenter = { x: agents[0].x + 71, y: agents[0].y + 71 };
+  const positions = layoutFourthLevelItems(fourth, third, expanded, obstacles, supervisorCenter);
+  assert.equal(positions.size, 125);
+  const circles = fourth.map(item => {
+    const child = positions.get(item.id);
+    const parent = third.get(item.parentId);
+    const link = fourthConnectionAt(parent, child, expanded.has(item.parentId));
+    assert.ok(Math.abs(Math.hypot(link.end.x - child.x, link.end.y - child.y) - fourthRadius) < 1e-8);
+    return { x: child.x - fourthRadius, y: child.y - fourthRadius,
+      width: fourthRadius * 2, height: fourthRadius * 2 };
+  });
+  for (let i = 0; i < circles.length; i++) {
+    for (const obstacle of obstacles) assert.equal(overlaps(circles[i], obstacle), false);
+    for (let j = i + 1; j < circles.length; j++) assert.equal(overlaps(circles[i], circles[j]), false);
+  }
+});
+
+test('fourth-level default links keep the same generous gap around compact and expanded parents', () => {
+  const [item] = createFourthLevelItems(submenuItems.slice(0, 1), () => 0);
+  const parent = { x: 100, y: 0 };
+  const centers = new Map([[item.parentId, parent]]);
+  for (const expanded of [false, true]) {
+    const expandedIds = new Set(expanded ? [item.parentId] : []);
+    const positions = layoutFourthLevelItems([item], centers, expandedIds,
+      [subtileBounds(parent, expanded)], { x: 0, y: 0 });
+    const link = fourthConnectionAt(parent, positions.get(item.id), expanded);
+    assert.ok(Math.abs(link.end.x - link.start.x - fourthConnectionGap) < 1e-8);
+  }
+});
+
+test('fourth-level tiles float independently and ease toward a changed layout', () => {
+  const [first, second] = createFourthLevelItems(submenuItems.slice(0, 2), () => 0);
+  assert.notDeepEqual(fourthFloatAt(first, 4), fourthFloatAt(second, 4));
+  assert.deepEqual(fourthFloatAt(first, 4, true), { x: 0, y: 0 });
+  const previous = new Map([[first.id, { x: 0, y: 0 }]]);
+  const targets = new Map([[first.id, { x: 100, y: 0 }]]);
+  const next = settleFourthLevelPositions(targets, previous, [], 1 / 60);
+  assert.ok(next.get(first.id).x > 0 && next.get(first.id).x < 20);
+  assert.deepEqual(settleFourthLevelPositions(targets, next, [], 0).get(first.id), next.get(first.id));
+});
+
+test('dragged and selected fourth-level cards keep their position while neighbors yield', () => {
+  const first = 'first';
+  const second = 'second';
+  const targets = new Map([[first, { x: 0, y: 0 }], [second, { x: 5, y: 0 }]]);
+  const settled = settleFourthLevelPositions(targets, new Map(), [], 0, first, false, new Set([first]));
+  assert.deepEqual(settled.get(first), { x: 0, y: 0 });
+  assert.equal(overlaps(fourthBounds(settled.get(first), true), fourthBounds(settled.get(second))), false);
+  const link = fourthConnectionAt({ x: -100, y: 0 }, settled.get(first), false, true);
+  assert.equal(link.end.x, -fourthDetailSize.width / 2);
+});
+
+test('a selected fourth-level card also pushes an unselected upper agent', () => {
+  const quality = agents.find(agent => agent.id === 'quality');
+  const original = { x: quality.x, y: quality.y };
+  const targets = new Map([[quality.id, original]]);
+  const obstacle = fourthBounds({ x: quality.x + 19, y: quality.y + 19 }, true);
+  const positions = settleAgentPositions(targets, targets, [quality], new Set(), 1 / 60,
+    null, false, [obstacle]);
+  assert.notDeepEqual(positions.get(quality.id), original);
+  assert.equal(overlaps(tileRect(quality, positions.get(quality.id)), obstacle), false);
+});
 
 test('same-level links connect every sibling pair and never cross parents', () => {
   assert.equal(specialistPeerPairs.length, 15);
@@ -25,13 +126,28 @@ test('peer lines attach to both circle edges and follow moved circles', () => {
   assert.ok(Math.abs(Math.hypot(diagonal.end.x - 120, diagonal.end.y - 130) - subtileRadius) < 1e-9);
 });
 
-test('every level-three card has a concise site-based summary and stays smaller than level two', () => {
+test('every level-three menu has a concise mock status and keeps the original card width', () => {
   assert.equal(submenuItems.length, 25);
   for (const item of submenuItems) {
-    assert.ok(item.summary && item.summary.length <= 35, item.label);
+    const profile = subtileStatusProfiles[item.id];
+    assert.ok(profile && profile.interval > 0 && profile.samples.length > 1, item.label);
+    assert.ok(profile.samples.every(sample => sample.length <= 36), item.label);
   }
+  assert.equal(subtileDetailSize.width, 224);
   assert.ok(subtileDetailSize.width < tileRect(agents[1], agents[1], true).width);
   assert.ok(subtileDetailSize.height < tileRect(agents[1], agents[1], true).height);
+});
+
+test('mock status changes only when its simulated reading or event interval arrives', () => {
+  const reading = createSubtileStatusState('quality-rate', 1000);
+  assert.equal(advanceSubtileStatusState(reading, 5, 2000), false);
+  assert.equal(reading.receivedAt, 1000);
+  assert.equal(advanceSubtileStatusState(reading, 1, 3000), true);
+  assert.equal(reading.receivedAt, 3000);
+  assert.equal(reading.text, subtileStatusProfiles['quality-rate'].samples[1]);
+  const history = createSubtileStatusState('equipment-history', 1000);
+  assert.equal(advanceSubtileStatusState(history, 25, 2000), false);
+  assert.equal(advanceSubtileStatusState(history, 1, 3000), true);
 });
 
 test('expanded level-three links end on card edges', () => {
