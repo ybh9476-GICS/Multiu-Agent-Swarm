@@ -13,9 +13,12 @@
   <body>
     <main class="graph-canvas" aria-label="에이전트 연결 구조 시안">
       <h1 class="visually-hidden">Multi-Agent Swarm Orchestrator and Supervisor Graph</h1>
-      <svg class="graph-resource" viewBox="-232 102 1920 1080" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="슈퍼바이저와 6개 전문 에이전트" aria-describedby="graph-description submenu-description">
+      <svg class="graph-resource" viewBox="-232 102 1920 1080" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="슈퍼바이저와 6개 전문 에이전트" aria-describedby="graph-description submenu-description peer-description">
         <desc id="graph-description">중앙 슈퍼바이저와 품질·설비·안전·생산·에너지·물류 에이전트가 연결된 목업입니다. 각 전문 에이전트는 과업 진행률이 0에서 100퍼센트까지 천천히 오르고, 정보가 도착하는 쪽 노드의 원형 프로그래스 바도 같은 진행률과 타일 색상으로 채워집니다. 흰색 점선은 과업에 따라 전문 에이전트에서 슈퍼바이저로 또는 슈퍼바이저에서 전문 에이전트로 이동합니다. 다음 과업 전 잠시 연결선과 노드가 비활성화되고 드물게 전문 에이전트 자체가 비활성화되기도 합니다. 작업 중에는 선택되지 않은 연결 타일이 1초 주기로 점멸합니다. 여러 타일을 동시에 선택할 수 있으며 선택한 타일은 정보 표시용 도형으로 확장되고 점멸과 부유가 멈춥니다. 확장된 타일을 다시 클릭하면 그 타일만 접히고 빈 곳을 클릭해도 열린 상태를 유지합니다. 겹칠 수 있는 타일은 서로 밀려납니다. 타일을 드래그해 이동하면 직선 연결선과 노드가 따라 움직입니다. 마우스 휠로 확대·축소하고 빈 곳을 드래그해 화면을 이동할 수 있습니다. 좌측 하단의 초기 배치 버튼으로 타일과 화면을 원래 상태로 돌릴 수 있습니다. 실제 연결 상태를 나타내는 화면은 아닙니다.</desc>
         <desc id="submenu-description">슈퍼바이저 주위에 6개 전문 에이전트를 펼쳐 배치하고, 그 바깥에 3단계 하위 메뉴를 나타내는 원형 아이콘 타일 25개를 배치했습니다. 원형 타일은 드래그해 옮기거나 클릭해 선택할 수 있지만 정보 카드로 확장되지는 않습니다. 전문 에이전트와 원형 타일 사이의 흰색 이동 점선은 현재 정보를 주고받는 방향을 나타냅니다. 작업 중에는 같은 부모의 하위 타일이 차례로 송수신하며, 쉬거나 비활성화되면 선과 노드가 회색 실선으로 바뀝니다.</desc>
+        <desc id="peer-description">같은 단계에서도 같은 상위 에이전트를 공유하는 타일끼리만 연결됩니다. 2단계 전문 에이전트 여섯 개는 슈퍼바이저를 공유해 서로 연결되고, 3단계 원형 타일은 같은 전문 에이전트의 하위 타일끼리만 연결됩니다. 평소에는 회색 실선으로 경로를 표시하고, 목업에서 정보를 주고받는 한 쌍만 흰 점선과 수신 노드 게이지로 강조합니다.</desc>
+        <g class="inactive-nodes" aria-hidden="true"></g>
+        <g class="peer-links" aria-hidden="true"></g>
         <g class="connections">
           <g data-connection="quality" data-connected="true">
             <path d="M 516.17 529.75 L 658.83 581.25" stroke-dasharray="4 8" />
@@ -43,6 +46,27 @@
         </g>
         <g data-agent="supervisor" transform="translate(657 571)" data-selected="false">
           <rect class="supervisor-compact-fill" x="1" y="1" width="140" height="140" rx="14" ry="14" fill="#9A69C7" fill-opacity="0.3" pointer-events="none" />
+          <g class="supervisor-compact-decor" aria-hidden="true" pointer-events="none">
+            <defs>
+              <radialGradient id="supervisor-core-glow">
+                <stop offset="0" stop-color="#b987ef" stop-opacity="0.34" />
+                <stop offset="0.62" stop-color="#a56bdc" stop-opacity="0.12" />
+                <stop offset="1" stop-color="#a56bdc" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+            <rect class="supervisor-compact-inset" x="5" y="5" width="132" height="132" rx="11" ry="11" />
+            <circle cx="71" cy="50" r="43" fill="url(#supervisor-core-glow)" />
+            <circle class="supervisor-core-halo" cx="71" cy="50" r="37" />
+            <circle class="supervisor-core-medallion" cx="71" cy="50" r="27" />
+            <circle class="supervisor-core-inner" cx="71" cy="50" r="23" />
+            <path class="supervisor-core-circuits" d="M 17 40 H 30 L 39 46 H 44 M 17 60 H 30 L 39 54 H 44 M 98 46 H 103 L 112 40 H 125 M 98 54 H 103 L 112 60 H 125 M 71 12 V 20 M 71 80 V 87" />
+            <g class="supervisor-core-points">
+              <circle cx="17" cy="40" r="1.4" /><circle cx="17" cy="60" r="1.4" />
+              <circle cx="125" cy="40" r="1.4" /><circle cx="125" cy="60" r="1.4" />
+              <circle cx="71" cy="12" r="1.4" /><circle cx="71" cy="87" r="1.4" />
+            </g>
+            <rect class="supervisor-stats-dock" x="5" y="98" width="132" height="36" rx="8" ry="8" />
+          </g>
           <image href="./assets/supervisor-compact.svg" width="142" height="142" overflow="visible" />
           <g class="supervisor-compact-stats" aria-hidden="true">
             <g data-stat-card="running" transform="translate(7 101)"><rect width="30" height="30" rx="5" /><text data-compact-stat="running" x="15" y="20" text-anchor="middle">6</text></g>
@@ -99,6 +123,7 @@
           </g>
         </g>
         <g class="subtiles" aria-hidden="true"></g>
+        <g class="peer-nodes" aria-hidden="true"></g>
       </svg>
       <div class="tile-controls" role="group" aria-label="에이전트 선택">
         <button class="tile-hit" type="button" data-tile-control="quality" aria-label="품질 에이전트 타일" aria-pressed="false"></button>

@@ -1,9 +1,82 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agents, advanceMockTaskState, connectionAt, createMockTaskState, mockConnectionActive, mockFlowDirection, mockTileActive, nearestFreePosition, positionAt, resolveTilePositions, tileRect } from './graph.js';
-import { layoutSubtiles, settleSubtilePositions, submenuGroups, submenuIconPaths, submenuItems, subtileConnection, subtileConnectionAt, subtileFloatAt, subtileMockFlow, subtileRadius } from './subtiles.js';
+import { activeSpecialistPeer, agents, advanceMockTaskState, connectionAt, createMockTaskState, mockConnectionActive, mockFlowDirection, mockTileActive, nearestFreePosition, positionAt, resolveTilePositions, sameLevelPairs, settleAgentPositions, specialistPeerPairs, subtilePeerPairs, tileRect } from './graph.js';
+import { circleConnectionAt, expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuGroups, submenuIconPaths, submenuItems, subtileBounds, subtileConnection, subtileConnectionAt, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
 
 const supervisor = { x: 200, y: 200 };
+
+test('same-level links connect every sibling pair and never cross parents', () => {
+  assert.equal(specialistPeerPairs.length, 15);
+  assert.equal(subtilePeerPairs.length, 42);
+  assert.deepEqual(sameLevelPairs(agents.slice(1), () => 'supervisor'), specialistPeerPairs);
+  for (const [first, second] of subtilePeerPairs) {
+    assert.equal(first.parentId, second.parentId);
+  }
+  assert.equal(subtilePeerPairs.some(([first, second]) =>
+    first.parentId === 'quality' && second.parentId === 'production'), false);
+});
+
+test('peer lines attach to both circle edges and follow moved circles', () => {
+  const horizontal = circleConnectionAt({ x: 0, y: 0 }, { x: 100, y: 0 });
+  assert.deepEqual(horizontal.start, { x: 22, y: 0 });
+  assert.deepEqual(horizontal.end, { x: 78, y: 0 });
+  const diagonal = circleConnectionAt({ x: 20, y: 30 }, { x: 120, y: 130 });
+  assert.ok(Math.abs(Math.hypot(diagonal.start.x - 20, diagonal.start.y - 30) - subtileRadius) < 1e-9);
+  assert.ok(Math.abs(Math.hypot(diagonal.end.x - 120, diagonal.end.y - 130) - subtileRadius) < 1e-9);
+});
+
+test('every level-three card has a concise site-based summary and stays smaller than level two', () => {
+  assert.equal(submenuItems.length, 25);
+  for (const item of submenuItems) {
+    assert.ok(item.summary && item.summary.length <= 35, item.label);
+  }
+  assert.ok(subtileDetailSize.width < tileRect(agents[1], agents[1], true).width);
+  assert.ok(subtileDetailSize.height < tileRect(agents[1], agents[1], true).height);
+});
+
+test('expanded level-three links end on card edges', () => {
+  const parent = { x: 0, y: 0, width: 70, height: 70 };
+  const center = { x: 280, y: 35 };
+  const link = expandedSubtileConnectionAt(parent, center, true);
+  assert.deepEqual(link.start, { x: 69, y: 35 });
+  assert.deepEqual(link.end, { x: center.x - subtileDetailSize.width / 2 + 1, y: 35 });
+  const peer = subtilePeerConnectionAt(center, { x: 600, y: 35 }, true, true);
+  assert.equal(peer.start.x, center.x + subtileDetailSize.width / 2 - 1);
+  assert.equal(peer.end.x, 600 - subtileDetailSize.width / 2 + 1);
+});
+
+test('expanded third-level cards move clear of an expanded parent and reserve room for later selections', () => {
+  const parent = new Map([['quality', { x: 190, y: 0, width: 340, height: 140 }]]);
+  const targets = new Map([
+    ['quality-rate', { x: 300, y: 70 }],
+    ['quality-vision', { x: 430, y: 70 }],
+  ]);
+  const settled = settleSubtilePositions(targets, new Map(), parent, 0.05, null, false,
+    new Set(['quality-rate']));
+  const card = subtileBounds(settled.get('quality-rate'), true);
+  const parentRect = parent.get('quality');
+  assert.equal(card.x < parentRect.x + parentRect.width && card.x + card.width > parentRect.x &&
+    card.y < parentRect.y + parentRect.height && card.y + card.height > parentRect.y, false);
+  const nextCard = subtileBounds(settled.get('quality-vision'), true);
+  assert.equal(card.x < nextCard.x + nextCard.width && card.x + card.width > nextCard.x &&
+    card.y < nextCard.y + nextCard.height && card.y + card.height > nextCard.y, false);
+});
+
+test('peer information flow rotates only through working siblings', () => {
+  const states = new Map(agents.slice(1).map(agent => [agent.id, { phase: 'working' }]));
+  assert.deepEqual(activeSpecialistPeer(specialistPeerPairs, states, 0), specialistPeerPairs[0]);
+  assert.deepEqual(activeSpecialistPeer(specialistPeerPairs, states, 4), specialistPeerPairs[1]);
+  states.get('quality').phase = 'offline';
+  const selected = activeSpecialistPeer(specialistPeerPairs, states, 0);
+  assert.equal(selected.some(agent => agent.id === 'quality'), false);
+  for (const state of states.values()) state.phase = 'handoff';
+  assert.equal(activeSpecialistPeer(specialistPeerPairs, states, 0), null);
+
+  const working = { phase: 'working', progress: 50, taskIndex: 0 };
+  assert.deepEqual(peerMockFlow(1, 3, working), { connected: true, progress: 50, direction: 'reverse' });
+  assert.equal(peerMockFlow(0, 3, working).connected, false);
+  assert.equal(peerMockFlow(1, 3, { ...working, phase: 'handoff' }).connected, false);
+});
 
 test('straight connections attach to the nearest facing edges', () => {
   const left = connectionAt({ id: 'quality' }, { x: 0, y: 230 }, supervisor);
@@ -106,6 +179,89 @@ function overlaps(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x &&
     a.y < b.y + b.height && a.y + a.height > b.y;
 }
+
+test('compact first- and second-level tiles ease apart before their outlines meet', () => {
+  const fixture = [
+    { id: 'quality', x: 0, y: 0 },
+    { id: 'equipment', x: 94, y: 0 },
+  ];
+  const close = new Map(fixture.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  const separated = settleAgentPositions(close, new Map(), fixture, new Set(), 0.016);
+  assert.ok(separated.get('quality').x < 0);
+  assert.ok(separated.get('equipment').x > 94);
+  assert.ok(tileRect(fixture[0], separated.get('quality')).x + 70 + 24 <=
+    tileRect(fixture[1], separated.get('equipment')).x);
+
+  const far = new Map([['quality', { x: 0, y: 0 }], ['equipment', { x: 200, y: 0 }]]);
+  const returning = settleAgentPositions(far, separated, fixture, new Set(), 0.016);
+  assert.ok(returning.get('equipment').x > separated.get('equipment').x);
+  assert.ok(returning.get('equipment').x < 200);
+});
+
+test('selected agent remains anchored while an approaching tile yields', () => {
+  const fixture = [
+    { id: 'supervisor', x: 0, y: 0 },
+    { id: 'quality', x: 230, y: 50 },
+  ];
+  const targets = new Map(fixture.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  const selected = new Set(['supervisor']);
+  const positions = settleAgentPositions(targets, new Map(), fixture, selected, 0.016);
+  assert.deepEqual(positions.get('supervisor'), { x: 0, y: 0 });
+  assert.notDeepEqual(positions.get('quality'), targets.get('quality'));
+  assert.equal(overlaps(tileRect(fixture[0], positions.get('supervisor'), true),
+    tileRect(fixture[1], positions.get('quality'))), false);
+});
+
+test('dragged agent stays under the pointer and pushes an unselected neighbor', () => {
+  const fixture = [
+    { id: 'quality', x: 0, y: 0 },
+    { id: 'equipment', x: 80, y: 0 },
+  ];
+  const targets = new Map(fixture.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  const positions = settleAgentPositions(targets, new Map(), fixture, new Set(), 0.016, 'quality');
+  assert.deepEqual(positions.get('quality'), targets.get('quality'));
+  assert.ok(positions.get('equipment').x > 80);
+});
+
+test('an agent dragged toward a selected card yields while the selected card stays fixed', () => {
+  const fixture = [
+    { id: 'supervisor', x: 0, y: 0 },
+    { id: 'quality', x: 100, y: 60 },
+  ];
+  const targets = new Map(fixture.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  const positions = settleAgentPositions(targets, new Map(), fixture, new Set(['supervisor']),
+    0.016, 'quality');
+  assert.deepEqual(positions.get('supervisor'), targets.get('supervisor'));
+  assert.notDeepEqual(positions.get('quality'), targets.get('quality'));
+  assert.equal(overlaps(tileRect(fixture[0], positions.get('supervisor'), true),
+    tileRect(fixture[1], positions.get('quality'))), false);
+});
+
+test('a dragged third-level tile pushes both first- and second-level tiles before contact', () => {
+  const fixture = [
+    { id: 'supervisor', x: 0, y: 0 },
+    { id: 'equipment', x: 280, y: 0 },
+  ];
+  const targets = new Map(fixture.map(agent => [agent.id, { x: agent.x, y: agent.y }]));
+  for (const [agent, center] of [[fixture[0], { x: 70, y: 70 }],
+    [fixture[1], { x: 315, y: 35 }]]) {
+    const child = subtileBounds(center);
+    const placed = settleAgentPositions(targets, new Map(), fixture, new Set(),
+      0.016, null, false, child);
+    assert.notDeepEqual(placed.get(agent.id), targets.get(agent.id));
+    assert.equal(overlaps(tileRect(agent, placed.get(agent.id)), child), false);
+  }
+});
+
+test('an expanded third-level tile uses its full card shape to push an upper tile', () => {
+  const fixture = [{ id: 'supervisor', x: 0, y: 0 }];
+  const targets = new Map([['supervisor', { x: 0, y: 0 }]]);
+  const child = subtileBounds({ x: 200, y: 70 }, true);
+  const placed = settleAgentPositions(targets, new Map(), fixture, new Set(),
+    0.016, null, false, child);
+  assert.notDeepEqual(placed.get('supervisor'), targets.get('supervisor'));
+  assert.equal(overlaps(tileRect(fixture[0], placed.get('supervisor')), child), false);
+});
 
 test('expanding a tile keeps it anchored and pushes other tiles out of its space', () => {
   const fixture = [

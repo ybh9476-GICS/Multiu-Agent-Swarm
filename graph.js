@@ -1,4 +1,4 @@
-import { layoutSubtiles, settleSubtilePositions, submenuIconPaths, submenuItems, subtileConnectionAt, subtileFloatAt, subtileMockFlow, subtileRadius } from './subtiles.js';
+import { expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuIconPaths, submenuItems, subtileBounds, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
 
 // Tile artwork follows OpenPencil: Page 1 / Section 2; positions form the three-level mock.
 export const agents = [
@@ -10,6 +10,27 @@ export const agents = [
   { id: 'energy', x: 935, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
   { id: 'logistics', x: 830, y: 795, amplitude: 8, period: 9.6, phase: 5.6 },
 ];
+
+export function sameLevelPairs(items, parentOf) {
+  const pairs = [];
+  for (let first = 0; first < items.length; first++) {
+    for (let second = first + 1; second < items.length; second++) {
+      if (parentOf(items[first]) === parentOf(items[second])) {
+        pairs.push([items[first], items[second]]);
+      }
+    }
+  }
+  return pairs;
+}
+
+export const specialistPeerPairs = sameLevelPairs(agents.slice(1), () => 'supervisor');
+export const subtilePeerPairs = sameLevelPairs(submenuItems, item => item.parentId);
+
+export function activeSpecialistPeer(pairs, states, seconds) {
+  const available = pairs.filter(([first, second]) =>
+    mockConnectionActive(states.get(first.id)) && mockConnectionActive(states.get(second.id)));
+  return available.length ? available[Math.floor(seconds / 4) % available.length] : null;
+}
 
 const tileSize = agent => agent.id === 'supervisor' ? 142 : 70;
 const outlineInset = 1;
@@ -188,6 +209,76 @@ export function resolveTilePositions(items, selectedIds, seconds, reducedMotion 
   return positions;
 }
 
+// Keep the seven agent tiles apart during their own floating motion as well as
+// while another tile is dragged nearby. The collision margin starts the nudge
+// before the visible outlines touch; previous positions make the return smooth.
+export function settleAgentPositions(targets, previous, items, selectedIds, deltaSeconds,
+  draggedId = null, reducedMotion = false, approachingSubtile = null) {
+  const selected = [...(typeof selectedIds === 'string' ? [selectedIds] : selectedIds ?? [])];
+  const selectedSet = new Set(selected);
+  const newestSelected = selectedSet.has(draggedId) ? draggedId : selected.at(-1);
+  const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, deltaSeconds) * 8);
+  const positions = new Map();
+  for (const [id, target] of targets) {
+    const last = previous.get(id);
+    positions.set(id, !last || id === draggedId ? { ...target } : {
+      x: last.x + (target.x - last.x) * blend,
+      y: last.y + (target.y - last.y) * blend,
+    });
+  }
+
+  const clearance = 26;
+  for (let pass = 0; pass < 8; pass++) {
+    if (approachingSubtile) {
+      for (const agent of items) {
+        if (selectedSet.has(agent.id)) continue;
+        const position = positions.get(agent.id);
+        const rect = tileRect(agent, position);
+        const gapX = Math.min(rect.x + rect.width + clearance - approachingSubtile.x,
+          approachingSubtile.x + approachingSubtile.width + clearance - rect.x);
+        const gapY = Math.min(rect.y + rect.height + clearance - approachingSubtile.y,
+          approachingSubtile.y + approachingSubtile.height + clearance - rect.y);
+        if (gapX <= 0 || gapY <= 0) continue;
+        const axis = gapX < gapY ? 'x' : 'y';
+        const agentCenter = rect[axis] + rect[axis === 'x' ? 'width' : 'height'] / 2;
+        const subtileCenter = approachingSubtile[axis] +
+          approachingSubtile[axis === 'x' ? 'width' : 'height'] / 2;
+        position[axis] += (agentCenter >= subtileCenter ? 1 : -1) * (axis === 'x' ? gapX : gapY);
+      }
+    }
+    for (let i = 0; i < items.length; i++) {
+      const first = items[i];
+      for (let j = i + 1; j < items.length; j++) {
+        const second = items[j];
+        const firstPosition = positions.get(first.id);
+        const secondPosition = positions.get(second.id);
+        const a = tileRect(first, firstPosition, selectedSet.has(first.id));
+        const b = tileRect(second, secondPosition, selectedSet.has(second.id));
+        const gapX = Math.min(a.x + a.width + clearance - b.x,
+          b.x + b.width + clearance - a.x);
+        const gapY = Math.min(a.y + a.height + clearance - b.y,
+          b.y + b.height + clearance - a.y);
+        if (gapX <= 0 || gapY <= 0) continue;
+        const firstLocked = first.id === newestSelected ||
+          (first.id === draggedId && (selectedSet.has(first.id) || !selectedSet.has(second.id))) ||
+          (selectedSet.has(first.id) && !selectedSet.has(second.id));
+        const secondLocked = second.id === newestSelected ||
+          (second.id === draggedId && (selectedSet.has(second.id) || !selectedSet.has(first.id))) ||
+          (selectedSet.has(second.id) && !selectedSet.has(first.id));
+        if (firstLocked && secondLocked) continue;
+        const axis = gapX < gapY ? 'x' : 'y';
+        const firstCenter = a[axis] + a[axis === 'x' ? 'width' : 'height'] / 2;
+        const secondCenter = b[axis] + b[axis === 'x' ? 'width' : 'height'] / 2;
+        const sign = secondCenter >= firstCenter ? 1 : -1;
+        const gap = axis === 'x' ? gapX : gapY;
+        if (!firstLocked) firstPosition[axis] -= sign * gap * (secondLocked ? 1 : 0.5);
+        if (!secondLocked) secondPosition[axis] += sign * gap * (firstLocked ? 1 : 0.5);
+      }
+    }
+  }
+  return positions;
+}
+
 export function connectionAt(agent, position, supervisor, fromRect = tileRect(agent, position), toRect = tileRect({ id: 'supervisor' }, supervisor)) {
   // A rounded rectangle is an inner rectangle expanded by its corner radius.
   // The nearest inner points give the shortest line between tile outlines.
@@ -224,6 +315,11 @@ export function connectionAt(agent, position, supervisor, fromRect = tileRect(ag
 if (typeof document !== 'undefined') {
   const canvas = document.querySelector('.graph-canvas');
   const svg = document.querySelector('.graph-resource');
+  const inactiveNodeLayer = svg.querySelector('.inactive-nodes');
+  function setNodePaintOrder(group, nodes, connected) {
+    const layer = connected ? group : inactiveNodeLayer;
+    for (const node of nodes) if (node.parentNode !== layer) layer.append(node);
+  }
   const controls = document.querySelector('.tile-controls');
   const tooltip = document.querySelector('.tile-tooltip');
   const detailsTemplate = document.querySelector('.agent-details');
@@ -337,6 +433,7 @@ if (typeof document !== 'undefined') {
       tile: document.querySelector(`[data-agent="${agent.id}"]`),
       button: document.querySelector(`[data-tile-control="${agent.id}"]`),
       path: connection?.querySelector('path'),
+      nodeGroup,
       nodes,
       progressTrack,
       progressRing,
@@ -351,6 +448,7 @@ if (typeof document !== 'undefined') {
   const subtileLinks = document.querySelector('.subtile-links');
   const subtileLayer = document.querySelector('.subtiles');
   const selectedSubtiles = new Set();
+  const fixedSubtilePositions = new Map();
   const manualSubtileOffsets = new Map();
   const suppressedSubtileClicks = new Set();
   const subtileViews = submenuItems.map(item => {
@@ -369,7 +467,39 @@ if (typeof document !== 'undefined') {
     icon.classList.add('subtile-icon');
     icon.setAttribute('transform', 'translate(-12 -12)');
     icon.innerHTML = submenuIconPaths[item.icon];
-    group.append(circle, icon);
+    const detailFrame = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    detailFrame.classList.add('subtile-detail-frame');
+    detailFrame.setAttribute('x', String(-subtileDetailSize.width / 2));
+    detailFrame.setAttribute('y', String(-subtileDetailSize.height / 2));
+    detailFrame.setAttribute('width', String(subtileDetailSize.width));
+    detailFrame.setAttribute('height', String(subtileDetailSize.height));
+    const detail = document.createElement('div');
+    detail.className = 'subtile-details';
+    const header = document.createElement('div');
+    header.className = 'subtile-details__header';
+    const emblem = document.createElement('span');
+    emblem.className = 'subtile-details__emblem';
+    const detailIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    detailIcon.setAttribute('viewBox', '0 0 24 24');
+    detailIcon.setAttribute('aria-hidden', 'true');
+    detailIcon.innerHTML = submenuIconPaths[item.icon];
+    emblem.append(detailIcon);
+    const heading = document.createElement('span');
+    heading.className = 'subtile-details__heading';
+    const parentLabel = document.createElement('span');
+    parentLabel.className = 'subtile-details__parent';
+    parentLabel.textContent = cardData[item.parentId].title;
+    const title = document.createElement('strong');
+    title.className = 'subtile-details__title';
+    title.textContent = item.label;
+    heading.append(parentLabel, title);
+    header.append(emblem, heading);
+    const summary = document.createElement('p');
+    summary.className = 'subtile-details__summary';
+    summary.textContent = item.summary;
+    detail.append(header, summary);
+    detailFrame.append(detail);
+    group.append(circle, icon, detailFrame);
     subtileLayer.append(group);
     const ports = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     ports.classList.add('subtile-ports');
@@ -395,6 +525,7 @@ if (typeof document !== 'undefined') {
     button.dataset.label = item.label;
     button.setAttribute('aria-label', `${cardData[item.parentId].title} · ${item.label}`);
     button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-expanded', 'false');
     controls.append(button);
     button.addEventListener('click', event => {
       if (suppressedSubtileClicks.has(item.id)) {
@@ -402,18 +533,123 @@ if (typeof document !== 'undefined') {
         return;
       }
       const selected = !selectedSubtiles.has(item.id);
-      if (selected) selectedSubtiles.add(item.id);
-      else selectedSubtiles.delete(item.id);
+      if (selected) {
+        fixedSubtilePositions.set(item.id, { ...lastSubtilePositions.get(item.id) });
+        selectedSubtiles.add(item.id);
+      } else {
+        selectedSubtiles.delete(item.id);
+        fixedSubtilePositions.delete(item.id);
+        const center = lastSubtilePositions.get(item.id);
+        const parent = lastParentAnchorFrames.get(item.parentId);
+        if (center && parent) manualSubtileOffsets.set(item.id, {
+          x: center.x - parent.x - parent.width / 2,
+          y: center.y - parent.y - parent.height / 2,
+        });
+      }
       group.dataset.selected = String(selected);
       button.setAttribute('aria-pressed', String(selected));
+      button.setAttribute('aria-expanded', String(selected));
+      draw(elapsed);
     });
     button.addEventListener('pointerenter', event => { group.dataset.hover = 'true'; showTileTooltip(button, item.label, event); });
     button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
     button.addEventListener('pointerleave', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
     button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, item.label); });
-    button.addEventListener('blur', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('blur', () => { button.classList.remove('is-pointer-focused'); group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('keydown', () => button.classList.remove('is-pointer-focused'));
     return { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing };
   });
+  const peerLinksLayer = document.querySelector('.peer-links');
+  const peerNodesLayer = document.querySelector('.peer-nodes');
+  const peerMask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+  peerMask.id = 'peer-link-mask';
+  peerMask.setAttribute('maskUnits', 'userSpaceOnUse');
+  peerMask.setAttribute('maskContentUnits', 'userSpaceOnUse');
+  for (const [key, value] of Object.entries({ x: -10000, y: -10000, width: 20000, height: 20000 })) {
+    peerMask.setAttribute(key, String(value));
+  }
+  const peerMaskArea = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  for (const [key, value] of Object.entries({ x: -10000, y: -10000, width: 20000, height: 20000 })) {
+    peerMaskArea.setAttribute(key, String(value));
+  }
+  peerMaskArea.setAttribute('fill', '#fff');
+  peerMask.append(peerMaskArea);
+  const peerAgentMasks = new Map(agents.map(agent => {
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    shape.setAttribute('fill', '#000');
+    shape.setAttribute('rx', '12');
+    shape.setAttribute('ry', '12');
+    peerMask.append(shape);
+    return [agent.id, shape];
+  }));
+  const peerSubtileMasks = new Map(submenuItems.map(item => {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('r', String(subtileRadius - 1));
+    circle.setAttribute('fill', '#000');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('rx', '12');
+    rect.setAttribute('ry', '12');
+    rect.setAttribute('fill', '#000');
+    rect.style.display = 'none';
+    peerMask.append(circle, rect);
+    return [item.id, { circle, rect }];
+  }));
+  const peerMaskDefinitions = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  peerMaskDefinitions.append(peerMask);
+  svg.insertBefore(peerMaskDefinitions, peerLinksLayer);
+  peerLinksLayer.setAttribute('mask', 'url(#peer-link-mask)');
+  function createPeerView(pair, level, parentId, index, count) {
+    const [first, second] = pair;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.dataset.peerLevel = String(level);
+    line.dataset.peerFirst = first.id;
+    line.dataset.peerSecond = second.id;
+    line.dataset.peerParent = parentId;
+    line.dataset.connected = 'false';
+    peerLinksLayer.append(line);
+    const ports = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    ports.classList.add('peer-ports');
+    ports.dataset.peerLevel = String(level);
+    const firstNode = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const secondNode = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    firstNode.setAttribute('r', '2.5');
+    secondNode.setAttribute('r', '2.5');
+    const progressTrack = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    progressTrack.classList.add('peer-progress-track');
+    progressTrack.setAttribute('r', '8');
+    const progressRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    progressRing.classList.add('peer-progress-ring');
+    progressRing.setAttribute('r', '8');
+    progressRing.setAttribute('pathLength', '100');
+    progressRing.setAttribute('stroke-dasharray', '100');
+    ports.append(progressTrack, progressRing, firstNode, secondNode);
+    peerNodesLayer.append(ports);
+    return { pair, first, second, level, parentId, index, count, line, ports,
+      firstNode, secondNode, progressTrack, progressRing };
+  }
+  const specialistPeerViews = specialistPeerPairs.map((pair, index) =>
+    createPeerView(pair, 2, 'supervisor', index, specialistPeerPairs.length));
+  const subtilePairsByParent = new Map();
+  for (const pair of subtilePeerPairs) {
+    const parentId = pair[0].parentId;
+    if (!subtilePairsByParent.has(parentId)) subtilePairsByParent.set(parentId, []);
+    subtilePairsByParent.get(parentId).push(pair);
+  }
+  const subtilePeerViews = [...subtilePairsByParent].flatMap(([parentId, pairs]) =>
+    pairs.map((pair, index) => createPeerView(pair, 3, parentId, index, pairs.length)));
+  function placePeerView(view, connection) {
+    const { line, firstNode, secondNode, progressTrack, progressRing } = view;
+    line.setAttribute('d', connection.path);
+    firstNode.setAttribute('cx', connection.start.x);
+    firstNode.setAttribute('cy', connection.start.y);
+    secondNode.setAttribute('cx', connection.end.x);
+    secondNode.setAttribute('cy', connection.end.y);
+    const receiver = line.dataset.direction === 'reverse' ? connection.start : connection.end;
+    for (const ring of [progressTrack, progressRing]) {
+      ring.setAttribute('cx', receiver.x);
+      ring.setAttribute('cy', receiver.y);
+    }
+  }
   for (const { button, details } of views) {
     button.setAttribute('aria-controls', details.id);
     button.setAttribute('aria-expanded', 'false');
@@ -423,6 +659,8 @@ if (typeof document !== 'undefined') {
   let drag = null;
   let tileDrag = null;
   let subtileDrag = null;
+  let lastAgentPositions = new Map();
+  let lastAgentDrawSeconds = null;
   let lastSubtilePositions = new Map();
   let lastParentAnchorFrames = new Map();
   let lastSubtileDrawSeconds = null;
@@ -431,9 +669,13 @@ if (typeof document !== 'undefined') {
   let elapsed = 0;
   let previousTime = null;
 
-  function displayedPositions(seconds) {
+  function displayedPositions(seconds, deltaSeconds = 0) {
     const dragged = tileDrag?.moved ? { id: tileDrag.agent.id, position: tileDrag.position } : null;
-    return resolveTilePositions(agents, selectedTiles, seconds, preference.matches, dragged, fixedSelectedPositions);
+    const targets = resolveTilePositions(agents, selectedTiles, seconds, preference.matches, dragged, fixedSelectedPositions);
+    const subtileObstacle = subtileDrag?.moved
+      ? subtileBounds(subtileDrag.center, selectedSubtiles.has(subtileDrag.item.id)) : null;
+    return settleAgentPositions(targets, lastAgentPositions, agents, selectedTiles,
+      deltaSeconds, dragged?.id, preference.matches, subtileObstacle);
   }
 
   function worldAt(clientX, clientY) {
@@ -467,10 +709,13 @@ if (typeof document !== 'undefined') {
       const dash = path?.getAttribute('stroke-dasharray');
       return dash && dash !== 'none';
     }).map(({ agent }) => agent.id);
-    for (const { agent, tile, path, nodes } of views) {
+    for (const { agent, tile, path, nodeGroup, nodes } of views) {
       const lineFlowing = flowing.includes(agent.id);
       if (path) path.parentElement.dataset.connected = String(lineFlowing);
-      if (nodes) nodes[0].parentElement.dataset.connected = String(lineFlowing);
+      if (nodeGroup) {
+        nodeGroup.dataset.connected = String(lineFlowing);
+        setNodePaintOrder(nodeGroup, nodes, lineFlowing);
+      }
       tile.dataset.flowing = String(agent.id === 'supervisor' ? flowing.length > 0 : lineFlowing);
       const online = agent.id === 'supervisor' || mockTileActive(mockStates.get(agent.id));
       if (tile.dataset.connected === String(online)) continue;
@@ -510,7 +755,7 @@ if (typeof document !== 'undefined') {
   }
 
   function syncSubtileFlows() {
-    for (const { item, line, group, ports, progressRing } of subtileViews) {
+    for (const { item, line, group, ports, parentNode, childNode, progressRing } of subtileViews) {
       const state = mockStates.get(item.parentId);
       const flow = subtileMockFlow(item, state);
       const connected = String(flow.connected);
@@ -518,14 +763,57 @@ if (typeof document !== 'undefined') {
       if (line.dataset.direction !== flow.direction) line.dataset.direction = flow.direction;
       const dash = flow.connected ? '4 8' : 'none';
       if (line.getAttribute('stroke-dasharray') !== dash) line.setAttribute('stroke-dasharray', dash);
-      if (ports.dataset.connected !== connected) ports.dataset.connected = connected;
+      if (ports.dataset.connected !== connected) {
+        ports.dataset.connected = connected;
+        setNodePaintOrder(ports, [parentNode, childNode], flow.connected);
+      }
       if (group.dataset.flowing !== connected) group.dataset.flowing = connected;
       progressRing.setAttribute('stroke-dashoffset', String(100 - flow.progress));
     }
   }
 
+  function setPeerFlow(view, connected, direction, progress, color) {
+    const active = String(connected);
+    if (view.line.dataset.connected !== active) view.line.dataset.connected = active;
+    if (view.ports.dataset.connected !== active) {
+      view.ports.dataset.connected = active;
+      setNodePaintOrder(view.ports, [view.firstNode, view.secondNode], connected);
+    }
+    if (view.line.dataset.direction !== direction) view.line.dataset.direction = direction;
+    const dash = connected ? '4 8' : 'none';
+    if (view.line.getAttribute('stroke-dasharray') !== dash) view.line.setAttribute('stroke-dasharray', dash);
+    view.ports.style.setProperty('--peer-progress-color', color);
+    view.progressRing.setAttribute('stroke-dashoffset', String(100 - progress));
+  }
+
+  function syncPeerFlows() {
+    const selected = activeSpecialistPeer(specialistPeerPairs, mockStates, elapsed);
+    const cycle = Math.floor(elapsed / 4);
+    for (const view of specialistPeerViews) {
+      const firstState = mockStates.get(view.first.id);
+      const secondState = mockStates.get(view.second.id);
+      const direction = (cycle + view.index + firstState.taskIndex + secondState.taskIndex) % 2 === 0
+        ? 'forward' : 'reverse';
+      const receiver = direction === 'forward' ? view.second : view.first;
+      setPeerFlow(view, view.pair === selected, direction, elapsed % 4 / 4 * 100, activeColors[receiver.id]);
+    }
+    const flowingSubtiles = new Set();
+    for (const view of subtilePeerViews) {
+      const flow = peerMockFlow(view.index, view.count, mockStates.get(view.parentId));
+      setPeerFlow(view, flow.connected, flow.direction, flow.progress, activeColors[view.parentId]);
+      if (flow.connected) {
+        flowingSubtiles.add(view.first.id);
+        flowingSubtiles.add(view.second.id);
+      }
+    }
+    for (const { item, line, group } of subtileViews) {
+      group.dataset.flowing = String(line.dataset.connected === 'true' || flowingSubtiles.has(item.id));
+    }
+  }
+
   syncMockConnections();
   syncSubtileFlows();
+  syncPeerFlows();
 
   function updateCamera() {
     svg.setAttribute('viewBox', `${camera.x} ${camera.y} ${camera.width} ${camera.height}`);
@@ -648,6 +936,7 @@ if (typeof document !== 'undefined') {
     }
     Object.assign(camera, initialCamera);
     selectedSubtiles.clear();
+    fixedSubtilePositions.clear();
     manualSubtileOffsets.clear();
     if (subtileDrag) {
       const { button, pointerId } = subtileDrag;
@@ -658,12 +947,15 @@ if (typeof document !== 'undefined') {
     for (const { group, button } of subtileViews) {
       group.dataset.selected = 'false';
       button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-expanded', 'false');
     }
     clearSelections(false);
     elapsed = 0;
     previousTime = null;
     lastSubtilePositions = new Map();
     lastSubtileDrawSeconds = null;
+    lastAgentPositions = new Map();
+    lastAgentDrawSeconds = null;
     updateCamera();
   });
 
@@ -770,6 +1062,7 @@ if (typeof document !== 'undefined') {
       if (event.button !== 0 || subtileDrag || tileDrag) return;
       const center = lastSubtilePositions.get(item.id);
       if (!center) return;
+      button.classList.add('is-pointer-focused');
       const pointer = worldAt(event.clientX, event.clientY);
       subtileDrag = {
         item, button, pointerId: event.pointerId,
@@ -778,7 +1071,6 @@ if (typeof document !== 'undefined') {
         center, moved: false,
       };
       button.setPointerCapture(event.pointerId);
-      button.focus({ preventScroll: true });
     });
     button.addEventListener('pointermove', event => {
       if (!subtileDrag || subtileDrag.button !== button || subtileDrag.pointerId !== event.pointerId) return;
@@ -789,6 +1081,7 @@ if (typeof document !== 'undefined') {
       button.classList.add('is-dragging');
       const pointer = worldAt(event.clientX, event.clientY);
       subtileDrag.center = { x: pointer.x - subtileDrag.grabX, y: pointer.y - subtileDrag.grabY };
+      if (selectedSubtiles.has(item.id)) fixedSubtilePositions.set(item.id, subtileDrag.center);
       draw(elapsed);
       event.preventDefault();
     });
@@ -801,6 +1094,14 @@ if (typeof document !== 'undefined') {
           x: center.x - parent.x - parent.width / 2,
           y: center.y - parent.y - parent.height / 2,
         });
+        // Keep the space made by the dragged child after pointer release.
+        for (const agent of agents) {
+          if (selectedTiles.has(agent.id)) continue;
+          const displayed = lastAgentPositions.get(agent.id);
+          const floating = positionAt(agent, elapsed, preference.matches);
+          agent.x += displayed.x - floating.x;
+          agent.y += displayed.y - floating.y;
+        }
         suppressedSubtileClicks.add(item.id);
         setTimeout(() => suppressedSubtileClicks.delete(item.id), 0);
       }
@@ -869,7 +1170,11 @@ if (typeof document !== 'undefined') {
   canvas.addEventListener('pointercancel', finishDrag);
   canvas.addEventListener('lostpointercapture', finishDrag);
   function draw(seconds) {
-    const positions = displayedPositions(seconds);
+    const agentDelta = lastAgentDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastAgentDrawSeconds));
+    const positions = displayedPositions(seconds, agentDelta);
+    lastAgentPositions = positions;
+    lastAgentDrawSeconds = seconds;
+    for (const id of selectedTiles) fixedSelectedPositions.set(id, { ...positions.get(id) });
     const parentFrames = new Map();
     const anchorFrames = new Map();
     const supervisor = positions.get(agents[0].id);
@@ -879,6 +1184,11 @@ if (typeof document !== 'undefined') {
       const expanded = selectedTiles.has(agent.id);
       const rect = tileRect(agent, position, expanded);
       parentFrames.set(agent.id, rect);
+      const peerMaskShape = peerAgentMasks.get(agent.id);
+      peerMaskShape.setAttribute('x', rect.x + 2);
+      peerMaskShape.setAttribute('y', rect.y + 2);
+      peerMaskShape.setAttribute('width', rect.width - 4);
+      peerMaskShape.setAttribute('height', rect.height - 4);
       const orbit = positionAt(agent, seconds, preference.matches);
       const anchored = expanded || (tileDrag?.moved && tileDrag.agent.id === agent.id) ? position : {
         x: position.x - (orbit.x - agent.x),
@@ -915,24 +1225,49 @@ if (typeof document !== 'undefined') {
         ring.setAttribute('cy', receivingNode.y);
       }
     }
+    for (const view of specialistPeerViews) {
+      const firstPosition = positions.get(view.first.id);
+      const secondPosition = positions.get(view.second.id);
+      placePeerView(view, connectionAt(view.first, firstPosition, secondPosition,
+        parentFrames.get(view.first.id), parentFrames.get(view.second.id)));
+    }
     const baseChildren = layoutSubtiles(anchorFrames, manualSubtileOffsets,
       subtileDrag?.moved ? { id: subtileDrag.item.id, center: subtileDrag.center } : null);
     const targets = new Map(submenuItems.map(item => {
       const base = baseChildren.get(item.id);
       const drift = subtileDrag?.moved && subtileDrag.item.id === item.id ? { x: 0, y: 0 }
         : subtileFloatAt(item, seconds, preference.matches);
-      return [item.id, { x: base.x + drift.x, y: base.y + drift.y }];
+      const dragged = subtileDrag?.moved && subtileDrag.item.id === item.id;
+      return [item.id, dragged ? { ...subtileDrag.center } : selectedSubtiles.has(item.id)
+        ? { ...fixedSubtilePositions.get(item.id) } : { x: base.x + drift.x, y: base.y + drift.y }];
     }));
     const delta = lastSubtileDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastSubtileDrawSeconds));
     const childPositions = settleSubtilePositions(targets, lastSubtilePositions, parentFrames, delta,
-      subtileDrag?.moved ? subtileDrag.item.id : null, preference.matches);
+      subtileDrag?.moved ? subtileDrag.item.id : null, preference.matches, selectedSubtiles);
+    for (const id of selectedSubtiles) fixedSubtilePositions.set(id, { ...childPositions.get(id) });
     lastSubtileDrawSeconds = seconds;
     lastSubtilePositions = childPositions;
     lastParentAnchorFrames = anchorFrames;
+    for (const [id, center] of childPositions) {
+      const { circle, rect } = peerSubtileMasks.get(id);
+      const expanded = selectedSubtiles.has(id);
+      circle.style.display = expanded ? 'none' : '';
+      rect.style.display = expanded ? '' : 'none';
+      circle.setAttribute('cx', center.x);
+      circle.setAttribute('cy', center.y);
+      if (expanded) {
+        const bounds = subtileBounds(center, true);
+        rect.setAttribute('x', bounds.x + 2);
+        rect.setAttribute('y', bounds.y + 2);
+        rect.setAttribute('width', bounds.width - 4);
+        rect.setAttribute('height', bounds.height - 4);
+      }
+    }
     for (const { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing } of subtileViews) {
       const center = childPositions.get(item.id);
       group.setAttribute('transform', `translate(${center.x} ${center.y})`);
-      const connection = subtileConnectionAt(parentFrames.get(item.parentId), center);
+      const expanded = selectedSubtiles.has(item.id);
+      const connection = expandedSubtileConnectionAt(parentFrames.get(item.parentId), center, expanded);
       line.setAttribute('d', connection.path);
       for (const [node, point] of [[parentNode, connection.start], [childNode, connection.end]]) {
         node.setAttribute('cx', point.x);
@@ -943,10 +1278,16 @@ if (typeof document !== 'undefined') {
         ring.setAttribute('cx', receiving.x);
         ring.setAttribute('cy', receiving.y);
       }
-      button.style.left = `${(center.x - subtileRadius - 4 - camera.x) / camera.width * 100}%`;
-      button.style.top = `${(center.y - subtileRadius - 4 - camera.y) / camera.height * 100}%`;
-      button.style.width = `${(subtileRadius * 2 + 8) / camera.width * 100}%`;
-      button.style.height = `${(subtileRadius * 2 + 8) / camera.height * 100}%`;
+      const bounds = subtileBounds(center, expanded);
+      button.style.left = `${(bounds.x - 4 - camera.x) / camera.width * 100}%`;
+      button.style.top = `${(bounds.y - 4 - camera.y) / camera.height * 100}%`;
+      button.style.width = `${(bounds.width + 8) / camera.width * 100}%`;
+      button.style.height = `${(bounds.height + 8) / camera.height * 100}%`;
+      button.style.borderRadius = expanded ? '14px' : '50%';
+    }
+    for (const view of subtilePeerViews) {
+      placePeerView(view, subtilePeerConnectionAt(childPositions.get(view.first.id), childPositions.get(view.second.id),
+        selectedSubtiles.has(view.first.id), selectedSubtiles.has(view.second.id)));
     }
     positionTooltip();
   }
@@ -959,6 +1300,7 @@ if (typeof document !== 'undefined') {
     }
     if (changed) syncMockConnections();
     syncSubtileFlows();
+    syncPeerFlows();
     for (const view of views) updateProgress(view);
     draw(elapsed);
   }

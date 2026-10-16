@@ -4,56 +4,56 @@ export const submenuGroups = [
   {
     agentId: 'quality', side: -1,
     items: [
-      { id: 'quality-rate', label: '실시간 불량률 현황', icon: 'gauge' },
-      { id: 'quality-vision', label: '비전검사 결과 뷰어', icon: 'scan' },
-      { id: 'quality-types', label: '불량 유형 분석', icon: 'bars' },
-      { id: 'quality-temperature', label: '온도-불량 상관분석', icon: 'thermometer' },
-      { id: 'quality-history', label: '품질 이력 검색', icon: 'search' },
+      { id: 'quality-rate', label: '실시간 불량률 현황', icon: 'gauge', summary: '라인·설비별 불량률과 변화 추세' },
+      { id: 'quality-vision', label: '비전검사 결과 뷰어', icon: 'scan', summary: '검사 이미지와 AI 판정 결과' },
+      { id: 'quality-types', label: '불량 유형 분석', icon: 'bars', summary: '불량 유형별 빈도와 추세' },
+      { id: 'quality-temperature', label: '온도-불량 상관분석', icon: 'thermometer', summary: '온도·불량률 관계와 최적 구간' },
+      { id: 'quality-history', label: '품질 이력 검색', icon: 'search', summary: '기간·배치·설비별 검사 이력' },
     ],
   },
   {
     agentId: 'equipment', side: -1,
     items: [
-      { id: 'equipment-status', label: '설비 상태 종합', icon: 'monitor' },
-      { id: 'equipment-trend', label: '진동/온도 추세', icon: 'activity' },
-      { id: 'equipment-rul', label: 'RUL 잔여수명 예측', icon: 'hourglass' },
-      { id: 'equipment-order', label: '보전 작업 오더', icon: 'clipboard' },
-      { id: 'equipment-history', label: '보전 이력 조회', icon: 'history' },
+      { id: 'equipment-status', label: '설비 상태 종합', icon: 'monitor', summary: '전체 설비의 정상·경고·위험 현황' },
+      { id: 'equipment-trend', label: '진동/온도 추세', icon: 'activity', summary: '진동·온도 시계열과 임계치' },
+      { id: 'equipment-rul', label: 'RUL 잔여수명 예측', icon: 'hourglass', summary: '72시간 수명 예측과 보전 권장 시점' },
+      { id: 'equipment-order', label: '보전 작업 오더', icon: 'clipboard', summary: '추천 작업의 생성·배정·완료' },
+      { id: 'equipment-history', label: '보전 이력 조회', icon: 'history', summary: '설비별 보전 이력과 MTBF·MTTR' },
     ],
   },
   {
     agentId: 'safety', side: -1,
     items: [
-      { id: 'safety-fire', label: '지능형 CCTV 화재 감시', icon: 'camera' },
-      { id: 'safety-amr', label: 'AMR 충돌 방지 시스템', icon: 'shield' },
-      { id: 'safety-stop', label: '긴급 정지 및 알람 제어', icon: 'alert' },
+      { id: 'safety-fire', label: '지능형 CCTV 화재 감시', icon: 'camera', summary: 'AI 영상으로 화재·연기를 감지하고 경보' },
+      { id: 'safety-amr', label: 'AMR 충돌 방지 시스템', icon: 'shield', summary: 'AMR·작업자 근접 감지와 긴급 정지' },
+      { id: 'safety-stop', label: '긴급 정지 및 알람 제어', icon: 'alert', summary: '비상 시 전 공정 정지와 다채널 알림' },
     ],
   },
   {
     agentId: 'production', side: 1,
     items: [
-      { id: 'production-line', label: '라인별 가동 현황', icon: 'factory' },
-      { id: 'production-oee', label: 'OEE 대시보드', icon: 'gauge' },
-      { id: 'production-takt', label: '택트타임 분석', icon: 'timer' },
-      { id: 'production-batch', label: '배치별 생산 이력', icon: 'layers' },
-      { id: 'production-plan', label: '생산 계획 대비 실적', icon: 'target' },
+      { id: 'production-line', label: '라인별 가동 현황', icon: 'factory', summary: '라인별 가동·비가동·대기 상태' },
+      { id: 'production-oee', label: 'OEE 대시보드', icon: 'gauge', summary: '가용률·성능·양품률 기반 OEE' },
+      { id: 'production-takt', label: '택트타임 분석', icon: 'timer', summary: '사이클 타임 편차와 병목 공정' },
+      { id: 'production-batch', label: '배치별 생산 이력', icon: 'layers', summary: '배치 ID로 생산 이력 역추적' },
+      { id: 'production-plan', label: '생산 계획 대비 실적', icon: 'target', summary: '계획 수량과 실적 수량의 차이' },
     ],
   },
   {
     agentId: 'energy', side: 1,
     items: [
-      { id: 'energy-power', label: '전력 사용 현황', icon: 'bolt' },
-      { id: 'energy-cost', label: '에너지 비용 분석', icon: 'coins' },
-      { id: 'energy-peak', label: '피크 부하 관리', icon: 'peak' },
+      { id: 'energy-power', label: '전력 사용 현황', icon: 'bolt', summary: '설비별 실시간 전력 소비량' },
+      { id: 'energy-cost', label: '에너지 비용 분석', icon: 'coins', summary: '시간대별 단가를 반영한 비용' },
+      { id: 'energy-peak', label: '피크 부하 관리', icon: 'peak', summary: '피크 부하 분산 추천과 자동 제어' },
     ],
   },
   {
     agentId: 'logistics', side: 1,
     items: [
-      { id: 'logistics-route', label: 'AMR 이송 경로 최적화', icon: 'route' },
-      { id: 'logistics-buffer', label: '완제품 출하 버퍼 슬롯 배정', icon: 'package' },
-      { id: 'logistics-dispatch', label: '자재 투입 배차 명령 하달', icon: 'truck' },
-      { id: 'logistics-charge', label: 'AMR 충전 스케줄 조정', icon: 'battery' },
+      { id: 'logistics-route', label: 'AMR 이송 경로 최적화', icon: 'route', summary: 'AMR 이송 경로를 최적화' },
+      { id: 'logistics-buffer', label: '완제품 출하 버퍼 슬롯 배정', icon: 'package', summary: '완제품 출하 버퍼 슬롯 배정' },
+      { id: 'logistics-dispatch', label: '자재 투입 배차 명령 하달', icon: 'truck', summary: '자재 투입 배차 명령 전달' },
+      { id: 'logistics-charge', label: 'AMR 충전 스케줄 조정', icon: 'battery', summary: 'AMR 충전 일정을 조정' },
     ],
   },
 ];
@@ -63,6 +63,12 @@ export const submenuItems = submenuGroups.flatMap(group => group.items.map((item
 })));
 
 export const subtileRadius = 22;
+export const subtileDetailSize = { width: 224, height: 100 };
+export function subtileBounds(center, expanded = false) {
+  const width = expanded ? subtileDetailSize.width : subtileRadius * 2;
+  const height = expanded ? subtileDetailSize.height : subtileRadius * 2;
+  return { x: center.x - width / 2, y: center.y - height / 2, width, height };
+}
 const motionIndex = new Map(submenuItems.map((item, index) => [item.id, index]));
 const subtileSize = subtileRadius * 2;
 const clearance = 10;
@@ -152,7 +158,7 @@ export function subtileFloatAt(item, seconds, reducedMotion = false) {
 
 // Start separating nearby circles before their visible outlines meet. The
 // spring keeps reflow targets from jumping when a parent tile moves or expands.
-export function settleSubtilePositions(targets, previous, obstacles, deltaSeconds, draggedId = null, reducedMotion = false) {
+export function settleSubtilePositions(targets, previous, obstacles, deltaSeconds, draggedId = null, reducedMotion = false, expandedIds = new Set()) {
   const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, deltaSeconds) * 8);
   const positions = new Map();
   for (const [id, target] of targets) {
@@ -171,6 +177,28 @@ export function settleSubtilePositions(targets, previous, obstacles, deltaSecond
       for (let j = i + 1; j < ids.length; j++) {
         const a = positions.get(ids[i]);
         const b = positions.get(ids[j]);
+        const aExpanded = expandedIds.has(ids[i]);
+        const bExpanded = expandedIds.has(ids[j]);
+        if (aExpanded || bExpanded) {
+          // Reserve a full card around compact neighbors so selecting one later
+          // does not make the newly expanded cards collide.
+          const aRect = subtileBounds(a, true);
+          const bRect = subtileBounds(b, true);
+          const gapX = Math.min(aRect.x + aRect.width + 18 - bRect.x,
+            bRect.x + bRect.width + 18 - aRect.x);
+          const gapY = Math.min(aRect.y + aRect.height + 18 - bRect.y,
+            bRect.y + bRect.height + 18 - aRect.y);
+          if (gapX <= 0 || gapY <= 0) continue;
+          const aLocked = ids[i] === draggedId || (aExpanded && !bExpanded);
+          const bLocked = ids[j] === draggedId || (bExpanded && !aExpanded);
+          if (aLocked && bLocked) continue;
+          const axis = gapX < gapY ? 'x' : 'y';
+          const sign = b[axis] >= a[axis] ? 1 : -1;
+          const gap = axis === 'x' ? gapX : gapY;
+          if (!aLocked) a[axis] -= sign * gap * (bLocked ? 1 : 0.5);
+          if (!bLocked) b[axis] += sign * gap * (aLocked ? 1 : 0.5);
+          continue;
+        }
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy);
@@ -194,6 +222,18 @@ export function settleSubtilePositions(targets, previous, obstacles, deltaSecond
     for (const [id, point] of positions) {
       if (id === draggedId) continue;
       for (const rect of obstacles.values()) {
+        if (expandedIds.has(id)) {
+          const card = subtileBounds(point, true);
+          const gapX = Math.min(card.x + card.width + 18 - rect.x,
+            rect.x + rect.width + 18 - card.x);
+          const gapY = Math.min(card.y + card.height + 18 - rect.y,
+            rect.y + rect.height + 18 - card.y);
+          if (gapX <= 0 || gapY <= 0) continue;
+          const axis = gapX < gapY ? 'x' : 'y';
+          const rectCenter = rect[axis] + rect[axis === 'x' ? 'width' : 'height'] / 2;
+          point[axis] += (point[axis] >= rectCenter ? 1 : -1) * (axis === 'x' ? gapX : gapY);
+          continue;
+        }
         const nearestX = Math.max(rect.x, Math.min(rect.x + rect.width, point.x));
         const nearestY = Math.max(rect.y, Math.min(rect.y + rect.height, point.y));
         const dx = point.x - nearestX;
@@ -224,16 +264,71 @@ export function subtileConnectionAt(parent, center) {
   const origin = midpoint(parent);
   const dx = center.x - origin.x;
   const dy = center.y - origin.y;
-  const scale = Math.min((parent.width / 2 - 1) / (Math.abs(dx) || Infinity),
-    (parent.height / 2 - 1) / (Math.abs(dy) || Infinity));
+  if (!dx && !dy) {
+    const start = { x: origin.x + parent.width / 2 - 1, y: origin.y };
+    const end = subtileEdgeAt(center, start);
+    return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
+  }
+  const scale = Math.min(dx ? (parent.width / 2 - 1) / Math.abs(dx) : Infinity,
+    dy ? (parent.height / 2 - 1) / Math.abs(dy) : Infinity);
   const start = { x: origin.x + dx * scale, y: origin.y + dy * scale };
-  const length = Math.hypot(center.x - start.x, center.y - start.y) || 1;
-  const end = { x: center.x - (center.x - start.x) / length * subtileRadius,
-    y: center.y - (center.y - start.y) / length * subtileRadius };
+  const end = subtileEdgeAt(center, start);
   return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
 }
 
 export const subtileConnection = (parent, center) => subtileConnectionAt(parent, center).path;
+
+export function circleConnectionAt(first, second) {
+  return subtilePeerConnectionAt(first, second);
+}
+
+function subtileEdgeAt(center, toward, expanded = false) {
+  const dx = toward.x - center.x;
+  const dy = toward.y - center.y;
+  if (!dx && !dy) return { x: center.x + (expanded ? subtileDetailSize.width / 2 - 1 : subtileRadius), y: center.y };
+  if (!expanded) {
+    const length = Math.hypot(dx, dy) || 1;
+    return { x: center.x + dx / length * subtileRadius,
+      y: center.y + dy / length * subtileRadius };
+  }
+  const scale = Math.min(dx ? (subtileDetailSize.width / 2 - 1) / Math.abs(dx) : Infinity,
+    dy ? (subtileDetailSize.height / 2 - 1) / Math.abs(dy) : Infinity);
+  return { x: center.x + dx * scale, y: center.y + dy * scale };
+}
+
+export function expandedSubtileConnectionAt(parent, center, expanded = false) {
+  if (!expanded) return subtileConnectionAt(parent, center);
+  const origin = midpoint(parent);
+  const dx = center.x - origin.x;
+  const dy = center.y - origin.y;
+  if (!dx && !dy) {
+    const start = { x: origin.x + parent.width / 2 - 1, y: origin.y };
+    const end = subtileEdgeAt(center, start, true);
+    return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
+  }
+  const scale = Math.min(dx ? (parent.width / 2 - 1) / Math.abs(dx) : Infinity,
+    dy ? (parent.height / 2 - 1) / Math.abs(dy) : Infinity);
+  const start = { x: origin.x + dx * scale, y: origin.y + dy * scale };
+  const end = subtileEdgeAt(center, start, true);
+  return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
+}
+
+export function subtilePeerConnectionAt(first, second, firstExpanded = false, secondExpanded = false) {
+  const start = subtileEdgeAt(first, second, firstExpanded);
+  const end = subtileEdgeAt(second, first, secondExpanded);
+  return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
+}
+
+export function peerMockFlow(index, count, parentState) {
+  const segment = parentState.progress / 100 * count;
+  const connected = parentState.phase === 'working' &&
+    Math.min(count - 1, Math.floor(segment)) === index;
+  return {
+    connected,
+    progress: connected ? Math.min(100, (segment - index) * 100) : 0,
+    direction: (index + parentState.taskIndex) % 2 === 0 ? 'forward' : 'reverse',
+  };
+}
 
 export function subtileMockFlow(item, parentState) {
   const connected = parentState.phase === 'working' &&
