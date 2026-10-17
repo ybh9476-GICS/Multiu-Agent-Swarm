@@ -587,14 +587,6 @@ body {
   fill-opacity: 0.8;
 }
 
-.supervisor-stats-dock {
-  fill: #1d142b;
-  fill-opacity: 0.72;
-  stroke: #be88ee;
-  stroke-opacity: 0.34;
-  stroke-width: 0.8;
-}
-
 [data-agent="supervisor"] .tile-outline {
   stroke-width: 2.5;
 }
@@ -822,6 +814,11 @@ body {
 /* 연결된 타일마다 동일한 1초 주기로 밝아졌다 돌아옵니다. */
 [data-agent][data-flowing="true"][data-selected="false"]:not([data-hover="true"]) image,
 [data-agent][data-flowing="true"][data-selected="false"]:not([data-hover="true"]) .tile-outline {
+  animation: tile-flow-pulse 1s ease-in-out infinite;
+}
+
+/* 줌 기준 커서가 타일 위에 남아도 축소된 슈퍼바이저 아이콘은 계속 점멸합니다. */
+[data-agent="supervisor"][data-flowing="true"][data-selected="false"] > image {
   animation: tile-flow-pulse 1s ease-in-out infinite;
 }
 

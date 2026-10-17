@@ -9,7 +9,6 @@ const resources = new Map([
   ['/graph.js', ['graph.js', 'text/javascript; charset=utf-8']],
   ['/subtiles.js', ['subtiles.js', 'text/javascript; charset=utf-8']],
   ['/fourth-tiles.js', ['fourth-tiles.js', 'text/javascript; charset=utf-8']],
-  ['/supervisor-companion.svg', ['supervisor-companion.svg', 'image/svg+xml; charset=utf-8']],
   ['/assets/section-2.png', ['assets/section-2.png', 'image/png']],
   ['/assets/supervisor-compact.svg', ['assets/supervisor-compact.svg', 'image/svg+xml; charset=utf-8']],
   ['/assets/supervisor-detail.svg', ['assets/supervisor-detail.svg', 'image/svg+xml; charset=utf-8']],

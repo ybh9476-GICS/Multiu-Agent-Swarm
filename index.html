@@ -68,7 +68,6 @@
               <circle cx="125" cy="40" r="1.4" /><circle cx="125" cy="60" r="1.4" />
               <circle cx="71" cy="12" r="1.4" /><circle cx="71" cy="87" r="1.4" />
             </g>
-            <rect class="supervisor-stats-dock" x="5" y="98" width="132" height="36" rx="8" ry="8" />
           </g>
           <image href="./assets/supervisor-compact.svg" width="142" height="142" overflow="visible" />
           <g class="supervisor-compact-stats" aria-hidden="true">
@@ -172,47 +171,5 @@
         </svg>
       </button>
     </main>
-<style>
-  .supervisor-companion {
-    position: fixed;
-    right: max(12px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
-    z-index: 100;
-    width: clamp(150px, 20vw, 240px);
-    pointer-events: none;
-    user-select: none;
-    animation: supervisor-companion-float 4.2s ease-in-out infinite;
-  }
-
-  .supervisor-companion img {
-    display: block;
-    width: 100%;
-    height: auto;
-    mix-blend-mode: screen;
-    animation: supervisor-companion-light 3.2s ease-in-out infinite;
-  }
-
-  @keyframes supervisor-companion-float {
-    0%, 100% { transform: translate3d(0, 0, 0); }
-    50% { transform: translate3d(0, -7px, 0); }
-  }
-
-  @keyframes supervisor-companion-light {
-    0%, 100% { opacity: 0.92; filter: brightness(1); }
-    50% { opacity: 1; filter: brightness(1.08); }
-  }
-
-  @media (max-width: 600px) {
-    .supervisor-companion { width: 120px; right: 6px; bottom: 6px; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .supervisor-companion,
-    .supervisor-companion img { animation: none; }
-  }
-</style>
-<div class="supervisor-companion" aria-hidden="true">
-  <img src="./supervisor-companion.svg" alt="" draggable="false">
-</div>
 </body>
 </html>
