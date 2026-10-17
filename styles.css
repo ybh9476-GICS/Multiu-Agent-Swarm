@@ -804,10 +804,39 @@ body {
   outline-offset: 3px;
 }
 
+.companion-character {
+  position: fixed;
+  z-index: 1;
+  right: 20px;
+  bottom: 18px;
+  width: clamp(96px, 11vw, 150px);
+  aspect-ratio: 781 / 954.14;
+  pointer-events: none;
+  user-select: none;
+}
+
+.companion-character svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.companion-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 @media (max-width: 600px) {
   .reset-layout {
     left: 16px;
     bottom: 16px;
+  }
+
+  .companion-character {
+    right: 12px;
+    bottom: 12px;
+    width: 96px;
   }
 }
 
