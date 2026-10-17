@@ -30,10 +30,10 @@
       </g>
       <g id="companion-gaze" transform="translate(214, 358.14)">
         <path class="companion-eye" d="M43 138C66.75 138 86 107.11 86 69C86 30.89 66.75 0 43 0C19.25 0 0 30.89 0 69C0 107.11 19.25 138 43 138Z" fill="#071B2D"/>
-        <g transform="translate(265, 0)">
+        <g id="companion-right-eye" transform="translate(265, 0)">
           <path class="companion-eye" d="M43 138C66.75 138 86 107.11 86 69C86 30.89 66.75 0 43 0C19.25 0 0 30.89 0 69C0 107.11 19.25 138 43 138Z" fill="#071B2D"/>
         </g>
-        <g transform="translate(122.52, 156.37)">
+        <g id="companion-mouth" transform="translate(122.52, 156.37)">
           <path d="M2.48 4.63C6.48 -1.37 14.48 -1.37 20.48 3.63C38.48 23.63 66.48 24.63 86.48 3.63C93.48 -2.37 102.48 -0.37 106.48 6.63C110.48 13.63 106.48 21.63 100.48 28.63C75.48 55.63 32.48 55.63 7.48 29.63C0.48 22.63 -2.52 12.63 2.48 4.63Z" fill="#071B2D"/>
         </g>
       </g>

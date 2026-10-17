@@ -8,6 +8,7 @@ const resources = new Map([
   ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
   ['/graph.js', ['graph.js', 'text/javascript; charset=utf-8']],
   ['/companion.js', ['companion.js', 'text/javascript; charset=utf-8']],
+  ['/companion-chat.js', ['companion-chat.js', 'text/javascript; charset=utf-8']],
   ['/subtiles.js', ['subtiles.js', 'text/javascript; charset=utf-8']],
   ['/fourth-tiles.js', ['fourth-tiles.js', 'text/javascript; charset=utf-8']],
   ['/assets/section-2.png', ['assets/section-2.png', 'image/png']],

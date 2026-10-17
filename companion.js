@@ -1,5 +1,110 @@
+import { attachCompanionChat } from './companion-chat.js';
+
 const host = document.querySelector('.companion-character');
+const figure = host.querySelector('.companion-figure');
+const closeButton = host.querySelector('.companion-close');
+const reopenButton = document.querySelector('.companion-reopen');
+const chat = attachCompanionChat(host, figure);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const pointer = { x: 0, y: 0, active: false };
+let restartAnimation = () => {};
+
+window.addEventListener('pointermove', (event) => {
+  pointer.x = event.clientX;
+  pointer.y = event.clientY;
+  pointer.active = true;
+}, { passive: true });
+document.documentElement.addEventListener('pointerleave', () => { pointer.active = false; });
+window.addEventListener('blur', () => { pointer.active = false; });
+
+let drag = null;
+let movedByUser = false;
+const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+
+function placeCharacter(left, top) {
+  host.style.left = `${clamp(left, 0, Math.max(0, innerWidth - host.offsetWidth - 12))}px`;
+  host.style.top = `${clamp(top, 8, Math.max(8, innerHeight - host.offsetHeight))}px`;
+  host.style.right = 'auto';
+  host.style.bottom = 'auto';
+  chat.position();
+}
+
+figure.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  const rect = host.getBoundingClientRect();
+  drag = {
+    id: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    left: rect.left,
+    top: rect.top,
+    moved: false,
+  };
+});
+
+window.addEventListener('pointermove', (event) => {
+  if (!drag || event.pointerId !== drag.id) return;
+  if (event.buttons === 0) {
+    finishDrag(event);
+    return;
+  }
+  if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 4) return;
+  if (!drag.moved) {
+    drag.moved = true;
+    movedByUser = true;
+    host.dataset.dragging = 'true';
+    placeCharacter(drag.left, drag.top);
+  }
+  placeCharacter(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
+});
+
+function finishDrag(event) {
+  if (!drag || event.pointerId !== drag.id) return;
+  if (!drag.moved && event.type === 'pointerup') {
+    chat.toggle();
+  }
+  host.dataset.dragging = 'false';
+  drag = null;
+}
+
+window.addEventListener('pointerup', finishDrag);
+window.addEventListener('pointercancel', finishDrag);
+window.addEventListener('blur', () => {
+  drag = null;
+  host.dataset.dragging = 'false';
+});
+figure.addEventListener('click', (event) => {
+  if (event.detail === 0) {
+    chat.toggle();
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (!movedByUser || host.hidden) return;
+  const rect = host.getBoundingClientRect();
+  placeCharacter(rect.left, rect.top);
+});
+
+closeButton.addEventListener('click', () => {
+  chat.close();
+  host.hidden = true;
+  reopenButton.hidden = false;
+  restartAnimation();
+  reopenButton.focus();
+});
+
+reopenButton.addEventListener('click', () => {
+  host.hidden = false;
+  if (movedByUser) {
+    const rect = host.getBoundingClientRect();
+    placeCharacter(rect.left, rect.top);
+  }
+  reopenButton.hidden = true;
+  restartAnimation();
+  figure.focus();
+});
 
 const response = await fetch('./assets/companion.svg');
 if (!response.ok) {
@@ -8,24 +113,24 @@ if (!response.ok) {
   const documentSvg = new DOMParser().parseFromString(await response.text(), 'image/svg+xml');
   const svg = documentSvg.documentElement;
   if (svg.localName === 'svg') {
-    host.append(document.importNode(svg, true));
-    animateCompanion();
+    figure.append(document.importNode(svg, true));
+    restartAnimation = animateCompanion();
   }
 }
 
 function animateCompanion() {
-  const head = host.querySelector('#companion-head');
   const gaze = host.querySelector('#companion-gaze');
+  const rightEye = host.querySelector('#companion-right-eye');
+  const mouth = host.querySelector('#companion-mouth');
   const eyes = host.querySelectorAll('.companion-eye');
-  if (!head || !gaze || eyes.length !== 2) return;
+  if (!gaze || !rightEye || !mouth || eyes.length !== 2) return () => {};
 
-  // 정면, 위, 아래, 좌측과 대각선 시선을 순회합니다. 우측은 같은 벡터를 반전해 사용합니다.
+  // 정면과 상하좌우, 대각선 방향을 순회합니다.
   const directions = [
     [0, 0], [-0.8, -0.65], [0, -1], [0.9, -0.5],
     [1, 0], [0.65, 0.7], [0, 1], [-0.9, 0.6], [-1, 0],
   ];
   const position = { x: 0, y: 0 };
-  const pointer = { x: 0, y: 0, at: -Infinity };
   let frame = 0;
   let previousTime = 0;
   let lastDirection = -1;
@@ -34,21 +139,23 @@ function animateCompanion() {
   let nextBlinkAt = performance.now() + 3200;
   let blinkStart = -Infinity;
 
-  window.addEventListener('pointermove', (event) => {
-    pointer.x = Math.max(-1, Math.min(1, event.clientX / window.innerWidth * 2 - 1));
-    pointer.y = Math.max(-1, Math.min(1, event.clientY / window.innerHeight * 2 - 1));
-    pointer.at = performance.now();
-  }, { passive: true });
-
   function draw(x, y, eyeHeight = 1) {
-    gaze.setAttribute('transform', `translate(${(214 + x * 21).toFixed(2)}, ${(358.14 + y * 18).toFixed(2)})`);
-    const headWidth = 1 - Math.abs(x) * 0.055;
-    head.setAttribute('transform', `translate(${(390.5 + x * 7).toFixed(2)} ${(480 + y * 5).toFixed(2)}) rotate(${(x * 6).toFixed(2)}) scale(${headWidth.toFixed(3)} 1) translate(-390.5 -480)`);
-    for (const eye of eyes) eye.style.transform = `scaleY(${eyeHeight.toFixed(3)})`;
+    // OpenPencil의 정면·좌·우·상·하 시선 좌표를 섞어 대각선에서도 부드럽게 움직입니다.
+    const total = Math.max(1, Math.abs(x) + Math.abs(y));
+    const left = Math.max(0, -x) / total;
+    const right = Math.max(0, x) / total;
+    const up = Math.max(0, -y) / total;
+    const down = Math.max(0, y) / total;
+    gaze.setAttribute('transform', `translate(${(214 - 86 * left + 162 * right).toFixed(2)}, ${(358.14 - 83 * up + 138 * down).toFixed(2)})`);
+    rightEye.setAttribute('transform', `translate(${(265 - 59 * left - 55 * right).toFixed(2)}, 0)`);
+    mouth.setAttribute('transform', `translate(${(122.52 - 49.52 * left - 20.52 * right).toFixed(2)}, ${(156.37 + 2.63 * right + 4.63 * up - 54.37 * down).toFixed(2)})`);
+    const verticalEyeScale = eyeHeight * (1 - 18 / 138 * down);
+    eyes[0].style.transform = `scale(${(1 - 20 / 86 * left).toFixed(3)}, ${verticalEyeScale.toFixed(3)})`;
+    eyes[1].style.transform = `scale(${(1 - 20 / 86 * right).toFixed(3)}, ${verticalEyeScale.toFixed(3)})`;
   }
 
   function tick(now) {
-    if (reducedMotion.matches || document.hidden) {
+    if (reducedMotion.matches || document.hidden || host.hidden) {
       frame = 0;
       draw(0, 0);
       return;
@@ -62,9 +169,13 @@ function animateCompanion() {
       nextDirectionAt = now + 2200;
     }
 
-    const trackingPointer = now - pointer.at < 2500;
-    const goalX = trackingPointer ? pointer.x : target[0];
-    const goalY = trackingPointer ? pointer.y : target[1];
+    const rect = host.getBoundingClientRect();
+    const dx = pointer.x - (rect.left + rect.width / 2);
+    const dy = pointer.y - (rect.top + rect.height * 0.45);
+    const distance = Math.hypot(dx, dy);
+    const strength = Math.min(1, distance / 85);
+    const goalX = pointer.active ? dx / (distance || 1) * strength : target[0];
+    const goalY = pointer.active ? dy / (distance || 1) * strength : target[1];
     const ease = 1 - Math.exp(-elapsed / 300);
     position.x += (goalX - position.x) * ease;
     position.y += (goalY - position.y) * ease;
@@ -84,7 +195,7 @@ function animateCompanion() {
   function start() {
     cancelAnimationFrame(frame);
     previousTime = 0;
-    if (reducedMotion.matches || document.hidden) {
+    if (reducedMotion.matches || document.hidden || host.hidden) {
       draw(0, 0);
       return;
     }
@@ -94,4 +205,5 @@ function animateCompanion() {
   reducedMotion.addEventListener('change', start);
   document.addEventListener('visibilitychange', start);
   start();
+  return start;
 }

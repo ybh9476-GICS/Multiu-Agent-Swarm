@@ -171,7 +171,51 @@
           <path d="M3 3v5h5" />
         </svg>
       </button>
-      <div class="companion-character" aria-hidden="true"></div>
+      <button class="companion-reopen" type="button" aria-label="캐릭터 다시 보이기" title="캐릭터 보기" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="7" width="16" height="13" rx="5" />
+          <path d="M12 7V4m-2 0h4" />
+          <path d="M9 12v2m6-2v2m-5 3h4" />
+        </svg>
+      </button>
+      <div class="companion-character">
+        <button class="companion-figure" type="button" aria-label="AI 챗봇 열기 또는 캐릭터 이동" aria-controls="companion-chat" aria-expanded="false"></button>
+        <button class="companion-close" type="button" aria-label="캐릭터 닫기">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+            <path d="M5 5l10 10M15 5L5 15" />
+          </svg>
+        </button>
+      </div>
+      <section class="companion-chat" id="companion-chat" role="dialog" aria-label="AI 슈퍼바이저 챗봇" hidden>
+        <header class="companion-chat__header">
+          <div class="companion-chat__identity">
+            <span class="companion-chat__avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="7" width="16" height="13" rx="5" /><path d="M12 7V4m-2 0h4M9 12v2m6-2v2m-5 3h4" />
+              </svg>
+            </span>
+            <span><strong>AI 슈퍼바이저 어시스턴트</strong><small><i aria-hidden="true"></i>Online &amp; Ready</small></span>
+          </div>
+          <button class="companion-chat__close" type="button" aria-label="채팅 닫기">
+            <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15" /></svg>
+          </button>
+        </header>
+        <div class="companion-chat__messages" role="log" aria-live="polite" aria-label="대화 내용"></div>
+        <form class="companion-chat__form">
+          <div class="companion-chat__suggestions" aria-label="추천 질문">
+            <button type="button">현재 전체 불량률 요약해줘</button>
+            <button type="button">B라인 가동 중단 위험 분석</button>
+            <button type="button">에너지 절감을 위한 최적 가동 시간은?</button>
+            <button type="button">최근 발생한 안전 경보 이력 조회</button>
+          </div>
+          <div class="companion-chat__composer">
+            <textarea rows="2" aria-label="메시지 입력" placeholder="메시지를 입력하세요 (Shift+Enter로 줄바꿈)"></textarea>
+            <button class="companion-chat__send" type="submit" aria-label="메시지 보내기" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-7.8 18-3.1-7.1L3 10.8 21 3Z" /><path d="M21 3 10.1 13.9" /></svg>
+            </button>
+          </div>
+        </form>
+      </section>
     </main>
 </body>
 </html>
