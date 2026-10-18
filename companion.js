@@ -4,6 +4,8 @@ const host = document.querySelector('.companion-character');
 const figure = host.querySelector('.companion-figure');
 const closeButton = host.querySelector('.companion-close');
 const reopenButton = document.querySelector('.companion-reopen');
+const canvas = document.querySelector('.graph-canvas');
+const graph = canvas.querySelector('.graph-resource');
 const chat = attachCompanionChat(host, figure);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = { x: 0, y: 0, active: false };
@@ -19,6 +21,7 @@ window.addEventListener('blur', () => { pointer.active = false; });
 
 let drag = null;
 let movedByUser = false;
+let summonFrame = 0;
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
 
 function placeCharacter(left, top) {
@@ -29,8 +32,85 @@ function placeCharacter(left, top) {
   chat.position();
 }
 
+function stopSummon() {
+  cancelAnimationFrame(summonFrame);
+  summonFrame = 0;
+}
+
+function summonEase(progress) {
+  // 앞뒤 10%에서 가속·감속하고, 가운데 80%는 일정한 속도를 유지합니다.
+  const accelerateUntil = 0.1;
+  const brakeFrom = 0.9;
+  const brakeLength = 1 - brakeFrom;
+  const travel = brakeFrom - accelerateUntil / 2 + brakeLength / 2;
+  if (progress < accelerateUntil) {
+    return (progress / 2 - accelerateUntil * Math.sin(Math.PI * progress / accelerateUntil) / (2 * Math.PI)) / travel;
+  }
+  if (progress < brakeFrom) return (progress - accelerateUntil / 2) / travel;
+  const brakingTime = progress - brakeFrom;
+  return (brakeFrom - accelerateUntil / 2 + brakingTime / 2
+    + brakeLength * Math.sin(Math.PI * brakingTime / brakeLength) / (2 * Math.PI)) / travel;
+}
+
+function summonCharacter(clientX, clientY) {
+  stopSummon();
+  if (host.hidden) {
+    host.hidden = false;
+    reopenButton.hidden = true;
+    restartAnimation();
+  }
+
+  const start = host.getBoundingClientRect();
+  const maxX = Math.max(0, innerWidth - host.offsetWidth - 12);
+  const maxY = Math.max(8, innerHeight - host.offsetHeight);
+  const targetX = clamp(clientX - host.offsetWidth / 2, 0, maxX);
+  const targetY = clamp(clientY - host.offsetHeight / 2, 8, maxY);
+  movedByUser = true;
+
+  if (reducedMotion.matches) {
+    placeCharacter(targetX, targetY);
+    return;
+  }
+
+  const dx = targetX - start.left;
+  const dy = targetY - start.top;
+  const distance = Math.hypot(dx, dy);
+  const overshoot = Math.min(12, distance * 0.12);
+  const beyondX = clamp(targetX + dx / (distance || 1) * overshoot, 0, maxX);
+  const beyondY = clamp(targetY + dy / (distance || 1) * overshoot, 8, maxY);
+  const travelDuration = 260;
+  const settleDuration = Math.hypot(beyondX - targetX, beyondY - targetY) > 0.5 ? 100 : 0;
+  const startedAt = performance.now();
+  function move(now) {
+    const elapsed = now - startedAt;
+    if (elapsed < travelDuration) {
+      const eased = summonEase(elapsed / travelDuration);
+      placeCharacter(start.left + (beyondX - start.left) * eased, start.top + (beyondY - start.top) * eased);
+      summonFrame = requestAnimationFrame(move);
+      return;
+    }
+    if (settleDuration) {
+      const progress = Math.min(1, (elapsed - travelDuration) / settleDuration);
+      const eased = progress ** 3 * (progress * (6 * progress - 15) + 10);
+      placeCharacter(beyondX + (targetX - beyondX) * eased, beyondY + (targetY - beyondY) * eased);
+      summonFrame = progress < 1 ? requestAnimationFrame(move) : 0;
+    } else {
+      placeCharacter(targetX, targetY);
+      summonFrame = 0;
+    }
+  }
+  summonFrame = requestAnimationFrame(move);
+}
+
+canvas.addEventListener('dblclick', event => {
+  if (event.button !== 0 || (event.target !== canvas && event.target !== graph)) return;
+  event.preventDefault();
+  summonCharacter(event.clientX, event.clientY);
+});
+
 figure.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
+  stopSummon();
   const rect = host.getBoundingClientRect();
   drag = {
     id: event.pointerId,
@@ -83,11 +163,13 @@ figure.addEventListener('click', (event) => {
 
 window.addEventListener('resize', () => {
   if (!movedByUser || host.hidden) return;
+  stopSummon();
   const rect = host.getBoundingClientRect();
   placeCharacter(rect.left, rect.top);
 });
 
 closeButton.addEventListener('click', () => {
+  stopSummon();
   chat.close();
   host.hidden = true;
   reopenButton.hidden = false;

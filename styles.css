@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --graph-background: #000000;
+  --graph-background: #07131F;
   --active-connection-color: #ffffff;
 }
 
@@ -809,7 +809,8 @@ body {
 }
 
 .companion-reopen {
-  left: 68px;
+  left: auto;
+  right: 24px;
 }
 
 .companion-reopen[hidden],
@@ -820,7 +821,7 @@ body {
 .companion-character {
   position: fixed;
   z-index: 3;
-  left: 76px;
+  right: 76px;
   bottom: 32px;
   width: clamp(48px, 5.5vw, 75px);
   aspect-ratio: 781 / 954.14;
@@ -1271,12 +1272,13 @@ body {
   }
 
   .companion-reopen {
-    left: 60px;
+    left: auto;
+    right: 16px;
     bottom: 16px;
   }
 
   .companion-character {
-    left: 68px;
+    right: 68px;
     bottom: 24px;
     width: 48px;
   }
