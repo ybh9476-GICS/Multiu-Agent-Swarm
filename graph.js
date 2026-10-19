@@ -324,6 +324,14 @@ if (typeof document !== 'undefined') {
     for (const node of nodes) if (node.parentNode !== layer) layer.append(node);
   }
   const controls = document.querySelector('.tile-controls');
+  const zoomControls = document.querySelector('.zoom-controls');
+  const zoomSlider = zoomControls.querySelector('.zoom-controls__slider');
+  const zoomIn = zoomControls.querySelector('.zoom-controls__in');
+  const zoomOut = zoomControls.querySelector('.zoom-controls__out');
+  const navigationOpen = document.querySelector('.navigation-open');
+  const navigationPanel = document.querySelector('.navigation-panel');
+  const navigationMap = navigationPanel.querySelector('.navigation-map');
+  const navigationClose = navigationPanel.querySelector('.navigation-close');
   const tooltip = document.querySelector('.tile-tooltip');
   const detailsTemplate = document.querySelector('.agent-details');
   const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -929,8 +937,194 @@ if (typeof document !== 'undefined') {
 
   function updateCamera() {
     svg.setAttribute('viewBox', `${camera.x} ${camera.y} ${camera.width} ${camera.height}`);
+    const zoom = baseWidth / camera.width;
+    const percent = Math.round(zoom * 100);
+    zoomSlider.value = String(Math.max(50, Math.min(400, percent)));
+    zoomSlider.setAttribute('aria-valuetext', `${percent}%`);
+    zoomIn.disabled = zoom >= 4 - 0.001;
+    zoomOut.disabled = zoom <= 0.5 + 0.001;
     draw(elapsed);
   }
+
+  function zoomTo(nextZoom, x = 0.5, y = 0.5) {
+    const viewport = controls.getBoundingClientRect();
+    if (!viewport.width || !viewport.height) return;
+    const zoom = Math.max(0.5, Math.min(4, nextZoom));
+    const worldX = camera.x + x * camera.width;
+    const worldY = camera.y + y * camera.height;
+    camera.width = baseWidth / zoom;
+    camera.height = camera.width * viewport.height / viewport.width;
+    camera.x = worldX - x * camera.width;
+    camera.y = worldY - y * camera.height;
+    updateCamera();
+  }
+
+  zoomControls.addEventListener('pointerdown', event => event.stopPropagation());
+  zoomControls.addEventListener('wheel', event => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, { passive: false });
+  zoomIn.addEventListener('click', () => zoomTo(baseWidth / camera.width * 1.25));
+  zoomOut.addEventListener('click', () => zoomTo(baseWidth / camera.width / 1.25));
+  zoomSlider.addEventListener('input', () => zoomTo(Number(zoomSlider.value) / 100));
+
+  let navigationTransform = null;
+  let navigationDrag = null;
+
+  function renderNavigation(parentFrames, childPositions, fourthPositions) {
+    if (navigationPanel.hidden) return;
+    const rect = navigationMap.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const pixelWidth = Math.max(1, Math.round(rect.width * ratio));
+    const pixelHeight = Math.max(1, Math.round(rect.height * ratio));
+    if (navigationMap.width !== pixelWidth || navigationMap.height !== pixelHeight) {
+      navigationMap.width = pixelWidth;
+      navigationMap.height = pixelHeight;
+    }
+    const context = navigationMap.getContext('2d');
+    if (!context) return;
+    context.setTransform(pixelWidth / rect.width, 0, 0, pixelHeight / rect.height, 0, 0);
+    context.clearRect(0, 0, rect.width, rect.height);
+
+    const bounds = navigationDrag?.bounds || (() => {
+      const area = {
+        left: Math.min(initialCamera.x, camera.x),
+        top: Math.min(initialCamera.y, camera.y),
+        right: Math.max(initialCamera.x + initialCamera.width, camera.x + camera.width),
+        bottom: Math.max(initialCamera.y + initialCamera.height, camera.y + camera.height),
+      };
+      const include = frame => {
+        area.left = Math.min(area.left, frame.x);
+        area.top = Math.min(area.top, frame.y);
+        area.right = Math.max(area.right, frame.x + frame.width);
+        area.bottom = Math.max(area.bottom, frame.y + frame.height);
+      };
+      for (const frame of parentFrames.values()) include(frame);
+      for (const item of submenuItems) include(subtileBounds(childPositions.get(item.id), selectedSubtiles.has(item.id)));
+      for (const item of fourthItems) include(fourthBounds(fourthPositions.get(item.id), selectedFourthTiles.has(item.id)));
+      return { left: area.left - 120, top: area.top - 120, right: area.right + 120, bottom: area.bottom + 120 };
+    })();
+    const scale = Math.min((rect.width - 20) / (bounds.right - bounds.left),
+      (rect.height - 20) / (bounds.bottom - bounds.top));
+    const offsetX = (rect.width - (bounds.right - bounds.left) * scale) / 2 - bounds.left * scale;
+    const offsetY = (rect.height - (bounds.bottom - bounds.top) * scale) / 2 - bounds.top * scale;
+    navigationTransform = { bounds, scale, offsetX, offsetY };
+    const point = center => ({ x: center.x * scale + offsetX, y: center.y * scale + offsetY });
+    const frameCenter = frame => ({ x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
+    const link = (start, end) => {
+      const a = point(start);
+      const b = point(end);
+      context.moveTo(a.x, a.y);
+      context.lineTo(b.x, b.y);
+    };
+
+    context.beginPath();
+    context.strokeStyle = 'rgba(138, 156, 175, 0.45)';
+    context.lineWidth = 1;
+    const supervisorCenter = frameCenter(parentFrames.get('supervisor'));
+    for (const agent of agents.slice(1)) link(supervisorCenter, frameCenter(parentFrames.get(agent.id)));
+    for (const item of submenuItems) link(frameCenter(parentFrames.get(item.parentId)), childPositions.get(item.id));
+    for (const item of fourthItems) link(childPositions.get(item.parentId), fourthPositions.get(item.id));
+    context.stroke();
+
+    for (const agent of agents) {
+      const frame = parentFrames.get(agent.id);
+      context.fillStyle = activeColors[agent.id];
+      context.globalAlpha = 0.65;
+      context.fillRect(frame.x * scale + offsetX, frame.y * scale + offsetY,
+        Math.max(3, frame.width * scale), Math.max(3, frame.height * scale));
+      context.globalAlpha = 1;
+    }
+    for (const item of submenuItems) {
+      const center = point(childPositions.get(item.id));
+      context.beginPath();
+      context.arc(center.x, center.y, Math.max(2.5, subtileRadius * scale), 0, Math.PI * 2);
+      context.fillStyle = activeColors[item.parentId];
+      context.fill();
+    }
+    for (const item of fourthItems) {
+      const center = point(fourthPositions.get(item.id));
+      context.beginPath();
+      context.arc(center.x, center.y, Math.max(1.8, fourthRadius * scale), 0, Math.PI * 2);
+      context.fillStyle = '#5b6470';
+      context.fill();
+    }
+    context.fillStyle = 'rgba(187, 220, 255, 0.08)';
+    context.strokeStyle = '#c5e1ff';
+    context.lineWidth = 1.5;
+    context.fillRect(camera.x * scale + offsetX, camera.y * scale + offsetY,
+      camera.width * scale, camera.height * scale);
+    context.strokeRect(camera.x * scale + offsetX, camera.y * scale + offsetY,
+      camera.width * scale, camera.height * scale);
+  }
+
+  function moveCameraFromNavigation(event) {
+    if (!navigationTransform) return;
+    const rect = navigationMap.getBoundingClientRect();
+    const { bounds, scale, offsetX, offsetY } = navigationTransform;
+    const centerX = Math.max(bounds.left, Math.min(bounds.right, (event.clientX - rect.left - offsetX) / scale));
+    const centerY = Math.max(bounds.top, Math.min(bounds.bottom, (event.clientY - rect.top - offsetY) / scale));
+    camera.x = centerX - camera.width / 2;
+    camera.y = centerY - camera.height / 2;
+    updateCamera();
+  }
+
+  function setNavigationOpen(open, keyboard = false) {
+    navigationPanel.hidden = !open;
+    navigationOpen.setAttribute('aria-expanded', String(open));
+    navigationOpen.setAttribute('aria-label', open ? '네비게이션 닫기' : '네비게이션 열기');
+    if (open) {
+      draw(elapsed);
+      if (keyboard) navigationMap.focus();
+    } else {
+      navigationTransform = null;
+      if (keyboard) navigationOpen.focus();
+    }
+  }
+
+  navigationOpen.addEventListener('click', event => setNavigationOpen(navigationPanel.hidden, event.detail === 0));
+  navigationClose.addEventListener('click', event => setNavigationOpen(false, event.detail === 0));
+  navigationPanel.addEventListener('pointerdown', event => event.stopPropagation());
+  navigationPanel.addEventListener('wheel', event => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, { passive: false });
+  navigationMap.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || !navigationTransform) return;
+    event.preventDefault();
+    navigationDrag = { pointerId: event.pointerId, bounds: navigationTransform.bounds };
+    navigationMap.dataset.dragging = 'true';
+    navigationMap.setPointerCapture(event.pointerId);
+    moveCameraFromNavigation(event);
+  });
+  navigationMap.addEventListener('pointermove', event => {
+    if (navigationDrag?.pointerId === event.pointerId) moveCameraFromNavigation(event);
+  });
+  function finishNavigationDrag(event) {
+    if (navigationDrag?.pointerId !== event.pointerId) return;
+    navigationDrag = null;
+    delete navigationMap.dataset.dragging;
+    if (navigationMap.hasPointerCapture(event.pointerId)) navigationMap.releasePointerCapture(event.pointerId);
+    draw(elapsed);
+  }
+  navigationMap.addEventListener('pointerup', finishNavigationDrag);
+  navigationMap.addEventListener('pointercancel', finishNavigationDrag);
+  navigationMap.addEventListener('lostpointercapture', finishNavigationDrag);
+  navigationMap.addEventListener('keydown', event => {
+    const direction = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+    }[event.key];
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setNavigationOpen(false, true);
+    } else if (direction) {
+      event.preventDefault();
+      camera.x += direction[0] * camera.width * 0.1;
+      camera.y += direction[1] * camera.height * 0.1;
+      updateCamera();
+    }
+  });
 
   function updateProgress(view) {
     const state = mockStates.get(view.agent.id);
@@ -1307,14 +1501,7 @@ if (typeof document !== 'undefined') {
     const x = Math.max(0, Math.min(1, (event.clientX - viewport.left) / viewport.width));
     const y = Math.max(0, Math.min(1, (event.clientY - viewport.top) / viewport.height));
     const distance = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.height : 1);
-    const zoom = Math.max(0.5, Math.min(4, baseWidth / camera.width * Math.exp(-distance * 0.001)));
-    const worldX = camera.x + x * camera.width;
-    const worldY = camera.y + y * camera.height;
-    camera.width = baseWidth / zoom;
-    camera.height = camera.width * viewport.height / viewport.width;
-    camera.x = worldX - x * camera.width;
-    camera.y = worldY - y * camera.height;
-    updateCamera();
+    zoomTo(baseWidth / camera.width * Math.exp(-distance * 0.001), x, y);
   }, { passive: false });
 
   canvas.addEventListener('pointerdown', event => {
@@ -1524,6 +1711,7 @@ if (typeof document !== 'undefined') {
       button.style.height = `${(bounds.height + 8) / camera.height * 100}%`;
       button.style.borderRadius = expanded ? '8px' : '50%';
     }
+    renderNavigation(parentFrames, childPositions, fourthPositions);
     positionTooltip();
   }
 

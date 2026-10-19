@@ -38,18 +38,11 @@ function stopSummon() {
 }
 
 function summonEase(progress) {
-  // 앞뒤 10%에서 가속·감속하고, 가운데 80%는 일정한 속도를 유지합니다.
-  const accelerateUntil = 0.1;
+  // 이동 경로의 마지막 10%에 이를 때까지 가속하고, 그 후 감속해 멈춥니다.
   const brakeFrom = 0.9;
-  const brakeLength = 1 - brakeFrom;
-  const travel = brakeFrom - accelerateUntil / 2 + brakeLength / 2;
-  if (progress < accelerateUntil) {
-    return (progress / 2 - accelerateUntil * Math.sin(Math.PI * progress / accelerateUntil) / (2 * Math.PI)) / travel;
-  }
-  if (progress < brakeFrom) return (progress - accelerateUntil / 2) / travel;
-  const brakingTime = progress - brakeFrom;
-  return (brakeFrom - accelerateUntil / 2 + brakingTime / 2
-    + brakeLength * Math.sin(Math.PI * brakingTime / brakeLength) / (2 * Math.PI)) / travel;
+  if (progress < brakeFrom) return progress * progress / brakeFrom;
+  const remaining = (1 - progress) / (1 - brakeFrom);
+  return 1 - (1 - brakeFrom) * remaining * remaining;
 }
 
 function summonCharacter(clientX, clientY) {
