@@ -950,12 +950,14 @@ if (typeof document !== 'undefined') {
     const viewport = controls.getBoundingClientRect();
     if (!viewport.width || !viewport.height) return;
     const zoom = Math.max(0.5, Math.min(4, nextZoom));
+    if (Math.abs(zoom - baseWidth / camera.width) < 0.0001) return;
     const worldX = camera.x + x * camera.width;
     const worldY = camera.y + y * camera.height;
     camera.width = baseWidth / zoom;
     camera.height = camera.width * viewport.height / viewport.width;
     camera.x = worldX - x * camera.width;
     camera.y = worldY - y * camera.height;
+    showNavigationDuringCameraMove();
     updateCamera();
   }
 
@@ -970,6 +972,9 @@ if (typeof document !== 'undefined') {
 
   let navigationTransform = null;
   let navigationDrag = null;
+  let navigationOpenedAutomatically = false;
+  let navigationAutoCloseTimer = null;
+  let navigationFadeOutTimer = null;
 
   function renderNavigation(parentFrames, childPositions, fourthPositions) {
     if (navigationPanel.hidden) return;
@@ -1071,7 +1076,16 @@ if (typeof document !== 'undefined') {
   }
 
   function setNavigationOpen(open, keyboard = false) {
+    window.clearTimeout(navigationFadeOutTimer);
+    navigationFadeOutTimer = null;
+    if (!open) {
+      window.clearTimeout(navigationAutoCloseTimer);
+      navigationAutoCloseTimer = null;
+      navigationOpenedAutomatically = false;
+    }
     navigationPanel.hidden = !open;
+    if (!open) navigationPanel.classList.remove('is-auto-animated', 'is-auto-fading');
+    navigationClose.hidden = open && navigationOpenedAutomatically;
     navigationOpen.setAttribute('aria-expanded', String(open));
     navigationOpen.setAttribute('aria-label', open ? '네비게이션 닫기' : '네비게이션 열기');
     if (open) {
@@ -1083,9 +1097,54 @@ if (typeof document !== 'undefined') {
     }
   }
 
+  function closeNavigationAutomatically() {
+    navigationAutoCloseTimer = null;
+    if (!navigationOpenedAutomatically || navigationPanel.hidden) return;
+    if (preference.matches) {
+      setNavigationOpen(false);
+      return;
+    }
+    navigationPanel.classList.add('is-auto-fading');
+    navigationFadeOutTimer = window.setTimeout(() => setNavigationOpen(false), 220);
+  }
+
+  function showNavigationDuringCameraMove() {
+    if (navigationPanel.hidden) {
+      navigationOpenedAutomatically = true;
+      if (!preference.matches) navigationPanel.classList.add('is-auto-animated', 'is-auto-fading');
+      setNavigationOpen(true);
+      if (!preference.matches) {
+        navigationPanel.getBoundingClientRect();
+        navigationPanel.classList.remove('is-auto-fading');
+      }
+    } else if (navigationFadeOutTimer !== null) {
+      window.clearTimeout(navigationFadeOutTimer);
+      navigationFadeOutTimer = null;
+      navigationPanel.classList.remove('is-auto-fading');
+    }
+    if (!navigationOpenedAutomatically) return;
+    window.clearTimeout(navigationAutoCloseTimer);
+    navigationAutoCloseTimer = drag?.moved ? null : window.setTimeout(closeNavigationAutomatically, 1000);
+  }
+
+  function keepNavigationOpen() {
+    if (!navigationOpenedAutomatically) return;
+    window.clearTimeout(navigationAutoCloseTimer);
+    navigationAutoCloseTimer = null;
+    window.clearTimeout(navigationFadeOutTimer);
+    navigationFadeOutTimer = null;
+    navigationOpenedAutomatically = false;
+    navigationPanel.classList.remove('is-auto-animated', 'is-auto-fading');
+    navigationClose.hidden = false;
+  }
+
   navigationOpen.addEventListener('click', event => setNavigationOpen(navigationPanel.hidden, event.detail === 0));
   navigationClose.addEventListener('click', event => setNavigationOpen(false, event.detail === 0));
-  navigationPanel.addEventListener('pointerdown', event => event.stopPropagation());
+  navigationPanel.addEventListener('pointerdown', event => {
+    event.stopPropagation();
+    keepNavigationOpen();
+  });
+  navigationPanel.addEventListener('focusin', keepNavigationOpen);
   navigationPanel.addEventListener('wheel', event => {
     event.preventDefault();
     event.stopPropagation();
@@ -1528,14 +1587,17 @@ if (typeof document !== 'undefined') {
     if (!viewport.width || !viewport.height) return;
     camera.x = drag.cameraX - dx * camera.width / viewport.width;
     camera.y = drag.cameraY - dy * camera.height / viewport.height;
+    showNavigationDuringCameraMove();
     updateCamera();
   });
 
   function finishDrag(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
+    const moved = drag.moved;
     drag = null;
     canvas.classList.remove('is-panning');
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (moved) showNavigationDuringCameraMove();
   }
 
   canvas.addEventListener('pointerup', finishDrag);

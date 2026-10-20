@@ -896,7 +896,7 @@ body {
 
 .companion-reopen {
   left: auto;
-  right: 68px;
+  right: 112px;
 }
 
 .help-open {
@@ -910,9 +910,9 @@ body {
   right: 24px;
   bottom: 76px;
   box-sizing: border-box;
-  width: min(400px, calc(100vw - 48px));
+  width: min(288px, calc(72vw - 34.56px));
   aspect-ratio: 1.8;
-  max-height: calc(100dvh - 110px);
+  max-height: calc(72dvh - 79.2px);
   padding: 9px;
   border: 1px solid #4c5a69;
   border-radius: 12px;
@@ -924,8 +924,13 @@ body {
   display: none;
 }
 
-.graph-canvas:has(.companion-character[hidden]) .navigation-open {
-  right: 112px;
+.navigation-panel.is-auto-animated {
+  transition: opacity 220ms ease-in-out;
+}
+
+.navigation-panel.is-auto-animated.is-auto-fading {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .navigation-map {
@@ -947,20 +952,11 @@ body {
   outline-offset: -2px;
 }
 
-.navigation-panel__label {
-  position: absolute;
-  top: 16px;
-  left: 18px;
-  color: #b8c7d5;
-  font: 11px/1 system-ui, sans-serif;
-  pointer-events: none;
-}
-
 .navigation-close {
   position: absolute;
   z-index: 1;
-  top: 5px;
-  right: 5px;
+  top: -32px;
+  right: 0;
   display: grid;
   place-items: center;
   width: 28px;
@@ -970,6 +966,10 @@ body {
   background: transparent;
   color: #f2f3f5;
   cursor: default;
+}
+
+.navigation-close[hidden] {
+  display: none;
 }
 
 .navigation-close::before {
@@ -1544,7 +1544,7 @@ body {
 
   .companion-reopen {
     left: auto;
-    right: 60px;
+    right: 104px;
     bottom: 16px;
   }
 
@@ -1557,12 +1557,8 @@ body {
   .navigation-panel {
     right: 16px;
     bottom: 68px;
-    width: min(400px, calc(100vw - 32px));
-    max-height: calc(100dvh - 92px);
-  }
-
-  .graph-canvas:has(.companion-character[hidden]) .navigation-open {
-    right: 104px;
+    width: min(288px, calc(72vw - 23.04px));
+    max-height: calc(72dvh - 66.24px);
   }
 
   .help-open {
@@ -1616,6 +1612,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .navigation-panel.is-auto-animated {
+    transition: none;
+  }
+
   .companion-figure,
   .companion-close,
   .companion-figure > svg {
