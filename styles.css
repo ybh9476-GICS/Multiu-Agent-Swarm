@@ -184,12 +184,28 @@ body {
 .fourth-detail,
 .fourth-detail-label,
 .fourth-tiles [data-selected="true"] .fourth-circle {
-  display: none;
+  opacity: 0;
+}
+
+.fourth-circle,
+.fourth-detail,
+.fourth-detail-label {
+  transition: opacity 280ms ease-in-out, transform 280ms ease-in-out;
+}
+
+.fourth-detail {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.3, 0.65);
 }
 
 .fourth-tiles [data-selected="true"] .fourth-detail,
 .fourth-tiles [data-selected="true"] .fourth-detail-label {
-  display: block;
+  opacity: 1;
+}
+
+.fourth-tiles [data-selected="true"] .fourth-detail {
+  transform: scale(1);
 }
 
 .fourth-tiles [data-selected="true"] .fourth-detail {
@@ -220,18 +236,28 @@ body {
 }
 
 .subtile-detail-frame {
-  display: none;
   pointer-events: none;
   overflow: visible;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.2, 0.48);
+  transition: opacity 280ms ease-in-out, transform 280ms ease-in-out;
+}
+
+.subtile-circle,
+.subtile-icon {
+  transition: opacity 280ms ease-in-out;
 }
 
 .subtiles [data-selected="true"] .subtile-circle,
 .subtiles [data-selected="true"] .subtile-icon {
-  display: none;
+  opacity: 0;
 }
 
 .subtiles [data-selected="true"] .subtile-detail-frame {
-  display: block;
+  opacity: 1;
+  transform: scale(1);
 }
 
 .subtile-details {
@@ -437,12 +463,19 @@ body {
 [data-agent] image,
 [data-agent] .tile-outline {
   pointer-events: none;
-  transition: filter 180ms ease;
+}
+
+[data-agent] image {
+  transition: filter 180ms ease, opacity 280ms ease-in-out;
 }
 
 .tile-outline {
   fill: none;
   stroke-width: 2;
+}
+
+[data-agent] .tile-outline {
+  transition: filter 180ms ease;
 }
 
 .tile-hit {
@@ -525,18 +558,34 @@ body {
 /* 선택된 타일 안에서 기존 도형이 정보 타일 크기로 확장됩니다. */
 .tile-detail-frame {
   pointer-events: none;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.8);
+  transition: opacity 280ms ease-in-out, transform 280ms ease-in-out;
+}
+
+[data-agent][data-selected="true"] .tile-detail-frame {
+  opacity: 1;
+  transform: scale(1);
 }
 
 [data-agent][data-selected="true"] > image {
-  visibility: hidden;
+  opacity: 0;
 }
 
 [data-agent="supervisor"][data-selected="true"] > .supervisor-compact-fill {
-  visibility: hidden;
+  opacity: 0;
 }
 
 [data-agent="supervisor"][data-selected="true"] > .supervisor-compact-decor {
-  display: none;
+  opacity: 0;
+}
+
+.supervisor-compact-fill,
+.supervisor-compact-decor,
+.supervisor-compact-stats {
+  transition: opacity 280ms ease-in-out;
 }
 
 .supervisor-compact-decor {
@@ -592,12 +641,12 @@ body {
 }
 
 [data-agent="supervisor"][data-selected="true"] .supervisor-compact-stats {
-  display: none;
+  opacity: 0;
 }
 
 .supervisor-compact-stats {
   pointer-events: none;
-  transition: filter 180ms ease;
+  transition: filter 180ms ease, opacity 280ms ease-in-out;
 }
 
 .supervisor-compact-stats rect {
@@ -1631,8 +1680,17 @@ body {
 
   [data-agent] image,
   [data-agent] .tile-outline,
+  [data-agent] .tile-detail-frame,
+  .supervisor-compact-fill,
+  .supervisor-compact-decor,
   [data-agent] .supervisor-compact-stats,
-  [data-agent] .agent-details {
+  [data-agent] .agent-details,
+  .subtile-circle,
+  .subtile-icon,
+  .subtile-detail-frame,
+  .fourth-circle,
+  .fourth-detail,
+  .fourth-detail-label {
     transition: none;
     animation: none;
   }

@@ -335,6 +335,40 @@ if (typeof document !== 'undefined') {
   const tooltip = document.querySelector('.tile-tooltip');
   const detailsTemplate = document.querySelector('.agent-details');
   const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const expansionAnimations = new Map();
+  const expansionDuration = 280;
+  const mix = (from, to, amount) => from + (to - from) * amount;
+  const mixRect = (from, to, amount) => ({
+    x: mix(from.x, to.x, amount), y: mix(from.y, to.y, amount),
+    width: mix(from.width, to.width, amount), height: mix(from.height, to.height, amount),
+  });
+  function mixConnection(from, to, amount) {
+    const start = { x: mix(from.start.x, to.start.x, amount), y: mix(from.start.y, to.start.y, amount) };
+    const end = { x: mix(from.end.x, to.end.x, amount), y: mix(from.end.y, to.end.y, amount) };
+    return { start, end, path: `M ${start.x} ${start.y} L ${end.x} ${end.y}` };
+  }
+  function expansionProgress(key, fallback, now = performance.now()) {
+    const animation = expansionAnimations.get(key);
+    if (!animation || preference.matches) return fallback;
+    const fraction = Math.min(1, (now - animation.started) / animation.duration);
+    if (fraction >= 1) {
+      expansionAnimations.delete(key);
+      return animation.to;
+    }
+    const eased = fraction * fraction * (3 - 2 * fraction);
+    return mix(animation.from, animation.to, eased);
+  }
+  function animateExpansion(key, expanded, wasExpanded) {
+    const to = expanded ? 1 : 0;
+    const from = expansionProgress(key, wasExpanded ? 1 : 0);
+    if (preference.matches || Math.abs(to - from) < 0.001) {
+      expansionAnimations.delete(key);
+      return;
+    }
+    expansionAnimations.set(key, {
+      from, to, started: performance.now(), duration: expansionDuration * Math.abs(to - from),
+    });
+  }
   const baseWidth = 1920;
   const baseHeight = 1080;
   const inactiveColor = '#4C4E53';
@@ -443,9 +477,11 @@ if (typeof document !== 'undefined') {
     const detailFrame = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
     detailFrame.classList.add('tile-detail-frame');
     detailFrame.append(details);
+    const tile = document.querySelector(`[data-agent="${agent.id}"]`);
+    tile.insertBefore(detailFrame, tile.querySelector('.tile-outline'));
     return {
       agent,
-      tile: document.querySelector(`[data-agent="${agent.id}"]`),
+      tile,
       button: document.querySelector(`[data-tile-control="${agent.id}"]`),
       path: connection?.querySelector('path'),
       nodeGroup,
@@ -463,6 +499,8 @@ if (typeof document !== 'undefined') {
   const subtileLinks = document.querySelector('.subtile-links');
   const subtileLayer = document.querySelector('.subtiles');
   const selectedSubtiles = new Set();
+  const pinnedSubtiles = new Set();
+  const hoveredSubtiles = new Set();
   const fixedSubtilePositions = new Map();
   const manualSubtileOffsets = new Map();
   const suppressedSubtileClicks = new Set();
@@ -549,13 +587,10 @@ if (typeof document !== 'undefined') {
     button.setAttribute('aria-pressed', 'false');
     button.setAttribute('aria-expanded', 'false');
     controls.append(button);
-    button.addEventListener('click', event => {
-      if (suppressedSubtileClicks.has(item.id)) {
-        event.preventDefault();
-        return;
-      }
-      const selected = !selectedSubtiles.has(item.id);
-      if (selected) {
+    function setSubtileExpanded(expanded) {
+      if (selectedSubtiles.has(item.id) === expanded) return;
+      animateExpansion(`subtile:${item.id}`, expanded, selectedSubtiles.has(item.id));
+      if (expanded) {
         fixedSubtilePositions.set(item.id, { ...lastSubtilePositions.get(item.id) });
         selectedSubtiles.add(item.id);
       } else {
@@ -568,24 +603,53 @@ if (typeof document !== 'undefined') {
           y: center.y - parent.y - parent.height / 2,
         });
       }
-      group.dataset.selected = String(selected);
-      button.setAttribute('aria-pressed', String(selected));
-      button.setAttribute('aria-expanded', String(selected));
+      group.dataset.selected = String(expanded);
+      button.setAttribute('aria-pressed', String(pinnedSubtiles.has(item.id)));
+      button.setAttribute('aria-expanded', String(expanded));
       draw(elapsed);
+    }
+    button.addEventListener('click', event => {
+      if (suppressedSubtileClicks.has(item.id)) {
+        event.preventDefault();
+        return;
+      }
+      if (pinnedSubtiles.has(item.id)) {
+        pinnedSubtiles.delete(item.id);
+        hoveredSubtiles.delete(item.id);
+        setSubtileExpanded(false);
+      } else {
+        pinnedSubtiles.add(item.id);
+        if (selectedSubtiles.has(item.id)) button.setAttribute('aria-pressed', 'true');
+        else setSubtileExpanded(true);
+      }
     });
-    button.addEventListener('pointerenter', event => { group.dataset.hover = 'true'; showTileTooltip(button, item.label, event); });
+    button.addEventListener('pointerenter', event => {
+      group.dataset.hover = 'true';
+      if (event.pointerType !== 'touch' && !tileDrag && !subtileDrag && !fourthDrag) {
+        hoveredSubtiles.add(item.id);
+        setSubtileExpanded(true);
+      }
+      showTileTooltip(button, item.label, event);
+    });
     button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
-    button.addEventListener('pointerleave', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('pointerleave', () => {
+      group.dataset.hover = 'false';
+      hideTileTooltip(button);
+      hoveredSubtiles.delete(item.id);
+      if (!pinnedSubtiles.has(item.id) && subtileDrag?.button !== button) setSubtileExpanded(false);
+    });
     button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, item.label); });
     button.addEventListener('blur', () => { button.classList.remove('is-pointer-focused'); group.dataset.hover = 'false'; hideTileTooltip(button); });
     button.addEventListener('keydown', () => button.classList.remove('is-pointer-focused'));
     return { item, line, group, button, ports, parentNode, childNode, progressTrack, progressRing,
-      statusText, statusMeta };
+      statusText, statusMeta, setExpanded: setSubtileExpanded };
   });
   const fourthItems = createFourthLevelItems(submenuItems);
   const fourthLinks = document.querySelector('.fourth-links');
   const fourthLayer = document.querySelector('.fourth-tiles');
   const selectedFourthTiles = new Set();
+  const pinnedFourthTiles = new Set();
+  const hoveredFourthTiles = new Set();
   const fixedFourthPositions = new Map();
   const manualFourthOffsets = new Map();
   const suppressedFourthClicks = new Set();
@@ -623,14 +687,11 @@ if (typeof document !== 'undefined') {
     button.setAttribute('aria-pressed', 'false');
     button.setAttribute('aria-expanded', 'false');
     controls.append(button);
-    button.addEventListener('click', event => {
-      if (suppressedFourthClicks.has(item.id)) {
-        event.preventDefault();
-        return;
-      }
-      const selected = !selectedFourthTiles.has(item.id);
+    function setFourthExpanded(expanded) {
+      if (selectedFourthTiles.has(item.id) === expanded) return;
+      animateExpansion(`fourth:${item.id}`, expanded, selectedFourthTiles.has(item.id));
       const center = lastFourthPositions.get(item.id);
-      if (selected) {
+      if (expanded) {
         if (center) fixedFourthPositions.set(item.id, { ...center });
         selectedFourthTiles.add(item.id);
       } else {
@@ -641,17 +702,44 @@ if (typeof document !== 'undefined') {
           x: center.x - parent.x, y: center.y - parent.y,
         });
       }
-      group.dataset.selected = String(selected);
-      button.setAttribute('aria-pressed', String(selected));
-      button.setAttribute('aria-expanded', String(selected));
+      group.dataset.selected = String(expanded);
+      button.setAttribute('aria-pressed', String(pinnedFourthTiles.has(item.id)));
+      button.setAttribute('aria-expanded', String(expanded));
       draw(elapsed);
+    }
+    button.addEventListener('click', event => {
+      if (suppressedFourthClicks.has(item.id)) {
+        event.preventDefault();
+        return;
+      }
+      if (pinnedFourthTiles.has(item.id)) {
+        pinnedFourthTiles.delete(item.id);
+        hoveredFourthTiles.delete(item.id);
+        setFourthExpanded(false);
+      } else {
+        pinnedFourthTiles.add(item.id);
+        if (selectedFourthTiles.has(item.id)) button.setAttribute('aria-pressed', 'true');
+        else setFourthExpanded(true);
+      }
     });
-    button.addEventListener('pointerenter', event => { group.dataset.hover = 'true'; showTileTooltip(button, 'unknown', event); });
+    button.addEventListener('pointerenter', event => {
+      group.dataset.hover = 'true';
+      if (event.pointerType !== 'touch' && !tileDrag && !subtileDrag && !fourthDrag) {
+        hoveredFourthTiles.add(item.id);
+        setFourthExpanded(true);
+      }
+      showTileTooltip(button, 'unknown', event);
+    });
     button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
-    button.addEventListener('pointerleave', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('pointerleave', () => {
+      group.dataset.hover = 'false';
+      hideTileTooltip(button);
+      hoveredFourthTiles.delete(item.id);
+      if (!pinnedFourthTiles.has(item.id) && fourthDrag?.button !== button) setFourthExpanded(false);
+    });
     button.addEventListener('focus', () => { group.dataset.hover = 'true'; showTileTooltip(button, 'unknown'); });
     button.addEventListener('blur', () => { group.dataset.hover = 'false'; hideTileTooltip(button); });
-    return { item, line, group, button };
+    return { item, line, group, button, setExpanded: setFourthExpanded };
   });
   const peerLinksLayer = document.querySelector('.peer-links');
   const peerNodesLayer = document.querySelector('.peer-nodes');
@@ -749,6 +837,8 @@ if (typeof document !== 'undefined') {
     button.setAttribute('aria-expanded', 'false');
   }
   const selectedTiles = new Set();
+  const pinnedTiles = new Set();
+  const hoveredTiles = new Set();
   const fixedSelectedPositions = new Map();
   let drag = null;
   let tileDrag = null;
@@ -1197,7 +1287,7 @@ if (typeof document !== 'undefined') {
   function renderAgentDetails(view) {
     const { agent, tile, details } = view;
     if (!selectedTiles.has(agent.id)) {
-      details.hidden = true;
+      details.setAttribute('aria-hidden', 'true');
       return;
     }
     const id = agent.id;
@@ -1230,10 +1320,12 @@ if (typeof document !== 'undefined') {
       details.querySelector('.agent-details__count').textContent = `◷ ${data.count}`;
     }
     details.hidden = false;
+    details.setAttribute('aria-hidden', 'false');
   }
 
   function toggleTile(view) {
-    const { agent, tile, button, detailFrame } = view;
+    const { agent, tile, button } = view;
+    animateExpansion(`agent:${agent.id}`, !selectedTiles.has(agent.id), selectedTiles.has(agent.id));
     if (selectedTiles.has(agent.id)) {
       const fixed = fixedSelectedPositions.get(agent.id);
       const floating = positionAt(agent, elapsed, preference.matches);
@@ -1242,8 +1334,7 @@ if (typeof document !== 'undefined') {
       fixedSelectedPositions.delete(agent.id);
       selectedTiles.delete(agent.id);
       tile.dataset.selected = 'false';
-      detailFrame.remove();
-      button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-pressed', String(pinnedTiles.has(agent.id)));
       button.setAttribute('aria-expanded', 'false');
     } else {
       fixedSelectedPositions.set(agent.id, displayedPositions(elapsed).get(agent.id));
@@ -1251,8 +1342,7 @@ if (typeof document !== 'undefined') {
       const settled = displayedPositions(elapsed);
       for (const id of selectedTiles) fixedSelectedPositions.set(id, settled.get(id));
       tile.dataset.selected = 'true';
-      tile.insertBefore(detailFrame, tile.querySelector('.tile-outline'));
-      button.setAttribute('aria-pressed', 'true');
+      button.setAttribute('aria-pressed', String(pinnedTiles.has(agent.id)));
       button.setAttribute('aria-expanded', 'true');
     }
     renderAgentDetails(view);
@@ -1260,6 +1350,9 @@ if (typeof document !== 'undefined') {
   }
 
   function clearSelections(restorePositions = true) {
+    for (const id of selectedTiles) expansionAnimations.delete(`agent:${id}`);
+    pinnedTiles.clear();
+    hoveredTiles.clear();
     if (!selectedTiles.size) return;
     for (const view of views) {
       if (!selectedTiles.has(view.agent.id)) continue;
@@ -1270,7 +1363,6 @@ if (typeof document !== 'undefined') {
         view.agent.y += fixed.y - floating.y;
       }
       view.tile.dataset.selected = 'false';
-      view.detailFrame.remove();
       view.button.setAttribute('aria-pressed', 'false');
       view.button.setAttribute('aria-expanded', 'false');
       view.details.hidden = true;
@@ -1282,6 +1374,7 @@ if (typeof document !== 'undefined') {
 
   document.querySelector('.reset-layout').addEventListener('click', () => {
     hideTileTooltip();
+    expansionAnimations.clear();
     if (tileDrag) {
       const { button, pointerId } = tileDrag;
       tileDrag = null;
@@ -1301,6 +1394,8 @@ if (typeof document !== 'undefined') {
     }
     Object.assign(camera, initialCamera);
     selectedSubtiles.clear();
+    pinnedSubtiles.clear();
+    hoveredSubtiles.clear();
     fixedSubtilePositions.clear();
     manualSubtileOffsets.clear();
     if (subtileDrag) {
@@ -1315,6 +1410,8 @@ if (typeof document !== 'undefined') {
       button.setAttribute('aria-expanded', 'false');
     }
     selectedFourthTiles.clear();
+    pinnedFourthTiles.clear();
+    hoveredFourthTiles.clear();
     fixedFourthPositions.clear();
     manualFourthOffsets.clear();
     if (fourthDrag) {
@@ -1413,7 +1510,8 @@ if (typeof document !== 'undefined') {
       tileDrag = null;
       button.classList.remove('is-dragging');
       if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
-      draw(elapsed);
+      if (!pinnedTiles.has(agent.id) && !hoveredTiles.has(agent.id) && selectedTiles.has(agent.id)) toggleTile(view);
+      else draw(elapsed);
     }
 
     button.addEventListener('pointerup', finishTileDrag);
@@ -1424,11 +1522,31 @@ if (typeof document !== 'undefined') {
         event.preventDefault();
         return;
       }
-      toggleTile(view);
+      if (pinnedTiles.has(agent.id)) {
+        pinnedTiles.delete(agent.id);
+        hoveredTiles.delete(agent.id);
+        toggleTile(view);
+      } else {
+        pinnedTiles.add(agent.id);
+        if (selectedTiles.has(agent.id)) button.setAttribute('aria-pressed', 'true');
+        else toggleTile(view);
+      }
     });
-    button.addEventListener('pointerenter', event => { tile.dataset.hover = 'true'; showTileTooltip(button, cardData[agent.id].title, event); });
+    button.addEventListener('pointerenter', event => {
+      tile.dataset.hover = 'true';
+      if (event.pointerType !== 'touch' && !tileDrag && !subtileDrag && !fourthDrag) {
+        hoveredTiles.add(agent.id);
+        if (!selectedTiles.has(agent.id)) toggleTile(view);
+      }
+      showTileTooltip(button, cardData[agent.id].title, event);
+    });
     button.addEventListener('pointermove', event => { if (tooltipButton === button) positionTooltip(event); });
-    button.addEventListener('pointerleave', () => { tile.dataset.hover = 'false'; hideTileTooltip(button); });
+    button.addEventListener('pointerleave', () => {
+      tile.dataset.hover = 'false';
+      hideTileTooltip(button);
+      hoveredTiles.delete(agent.id);
+      if (!pinnedTiles.has(agent.id) && tileDrag?.button !== button && selectedTiles.has(agent.id)) toggleTile(view);
+    });
     button.addEventListener('focus', () => { tile.dataset.hover = 'true'; showTileTooltip(button, cardData[agent.id].title); });
     button.addEventListener('blur', () => { tile.dataset.hover = 'false'; hideTileTooltip(button); });
     button.addEventListener('keydown', event => {
@@ -1438,7 +1556,7 @@ if (typeof document !== 'undefined') {
     });
   }
 
-  for (const { item, button } of subtileViews) {
+  for (const { item, button, setExpanded } of subtileViews) {
     button.addEventListener('pointerdown', event => {
       if (event.button !== 0 || subtileDrag || tileDrag || fourthDrag) return;
       const center = lastSubtilePositions.get(item.id);
@@ -1489,14 +1607,15 @@ if (typeof document !== 'undefined') {
       subtileDrag = null;
       button.classList.remove('is-dragging');
       if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
-      draw(elapsed);
+      if (selectedSubtiles.has(item.id) && !pinnedSubtiles.has(item.id) && !hoveredSubtiles.has(item.id)) setExpanded(false);
+      else draw(elapsed);
     }
     button.addEventListener('pointerup', finishSubtileDrag);
     button.addEventListener('pointercancel', finishSubtileDrag);
     button.addEventListener('lostpointercapture', finishSubtileDrag);
   }
 
-  for (const { item, button } of fourthViews) {
+  for (const { item, button, setExpanded } of fourthViews) {
     button.addEventListener('pointerdown', event => {
       if (event.button !== 0 || tileDrag || subtileDrag || fourthDrag) return;
       const center = lastFourthPositions.get(item.id);
@@ -1546,7 +1665,8 @@ if (typeof document !== 'undefined') {
       fourthDrag = null;
       button.classList.remove('is-dragging');
       if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
-      draw(elapsed);
+      if (selectedFourthTiles.has(item.id) && !pinnedFourthTiles.has(item.id) && !hoveredFourthTiles.has(item.id)) setExpanded(false);
+      else draw(elapsed);
     }
     window.addEventListener('pointerup', finishFourthDrag);
     window.addEventListener('pointercancel', finishFourthDrag);
@@ -1605,25 +1725,30 @@ if (typeof document !== 'undefined') {
   canvas.addEventListener('lostpointercapture', finishDrag);
   function draw(seconds) {
     if (tooltipButton?.getAttribute('aria-expanded') === 'true') hideTileTooltip();
+    const drawTime = performance.now();
     const agentDelta = lastAgentDrawSeconds === null ? 0 : Math.min(0.05, Math.max(0, seconds - lastAgentDrawSeconds));
     const positions = displayedPositions(seconds, agentDelta);
     lastAgentPositions = positions;
     lastAgentDrawSeconds = seconds;
     for (const id of selectedTiles) fixedSelectedPositions.set(id, { ...positions.get(id) });
     const parentFrames = new Map();
+    const visualParentFrames = new Map();
     const anchorFrames = new Map();
     const supervisor = positions.get(agents[0].id);
     const supervisorRect = tileRect(agents[0], supervisor, selectedTiles.has('supervisor'));
-    for (const { agent, tile, button, path, nodes, progressTrack, progressRing, detailFrame } of views) {
+    for (const { agent, tile, button, detailFrame } of views) {
       const position = positions.get(agent.id);
       const expanded = selectedTiles.has(agent.id);
       const rect = tileRect(agent, position, expanded);
+      const progress = expansionProgress(`agent:${agent.id}`, expanded ? 1 : 0, drawTime);
+      const visualRect = mixRect(tileRect(agent, position), tileRect(agent, position, true), progress);
       parentFrames.set(agent.id, rect);
+      visualParentFrames.set(agent.id, visualRect);
       const peerMaskShape = peerAgentMasks.get(agent.id);
-      peerMaskShape.setAttribute('x', rect.x + 2);
-      peerMaskShape.setAttribute('y', rect.y + 2);
-      peerMaskShape.setAttribute('width', rect.width - 4);
-      peerMaskShape.setAttribute('height', rect.height - 4);
+      peerMaskShape.setAttribute('x', visualRect.x + 2);
+      peerMaskShape.setAttribute('y', visualRect.y + 2);
+      peerMaskShape.setAttribute('width', visualRect.width - 4);
+      peerMaskShape.setAttribute('height', visualRect.height - 4);
       const orbit = positionAt(agent, seconds, preference.matches);
       const anchored = expanded || (tileDrag?.moved && tileDrag.agent.id === agent.id) ? position : {
         x: position.x - (orbit.x - agent.x),
@@ -1632,22 +1757,25 @@ if (typeof document !== 'undefined') {
       anchorFrames.set(agent.id, tileRect(agent, anchored, expanded));
       tile.setAttribute('transform', `translate(${position.x} ${position.y})`);
       const outline = tile.querySelector('.tile-outline');
-      outline.setAttribute('x', rect.x - position.x + outlineInset);
-      outline.setAttribute('y', rect.y - position.y + outlineInset);
-      outline.setAttribute('width', rect.width - outlineInset * 2);
-      outline.setAttribute('height', rect.height - outlineInset * 2);
+      outline.setAttribute('x', visualRect.x - position.x + outlineInset);
+      outline.setAttribute('y', visualRect.y - position.y + outlineInset);
+      outline.setAttribute('width', visualRect.width - outlineInset * 2);
+      outline.setAttribute('height', visualRect.height - outlineInset * 2);
       if (expanded) {
         detailFrame.setAttribute('x', rect.x - position.x);
         detailFrame.setAttribute('y', rect.y - position.y);
         detailFrame.setAttribute('width', rect.width);
         detailFrame.setAttribute('height', rect.height);
       }
-      button.style.left = `${(rect.x - 4 - camera.x) / camera.width * 100}%`;
-      button.style.top = `${(rect.y - 4 - camera.y) / camera.height * 100}%`;
-      button.style.width = `${(rect.width + 8) / camera.width * 100}%`;
-      button.style.height = `${(rect.height + 8) / camera.height * 100}%`;
+      button.style.left = `${(visualRect.x - 4 - camera.x) / camera.width * 100}%`;
+      button.style.top = `${(visualRect.y - 4 - camera.y) / camera.height * 100}%`;
+      button.style.width = `${(visualRect.width + 8) / camera.width * 100}%`;
+      button.style.height = `${(visualRect.height + 8) / camera.height * 100}%`;
+    }
+    for (const { agent, path, nodes, progressTrack, progressRing } of views) {
       if (!path) continue;
-      const connection = connectionAt(agent, position, supervisor, rect, supervisorRect);
+      const connection = connectionAt(agent, positions.get(agent.id), supervisor,
+        visualParentFrames.get(agent.id), visualParentFrames.get('supervisor'));
       path.setAttribute('d', connection.path);
       [connection.start, connection.end].forEach((point, index) => {
         nodes[index].setAttribute('cx', point.x);
@@ -1664,7 +1792,7 @@ if (typeof document !== 'undefined') {
       const firstPosition = positions.get(view.first.id);
       const secondPosition = positions.get(view.second.id);
       placePeerView(view, connectionAt(view.first, firstPosition, secondPosition,
-        parentFrames.get(view.first.id), parentFrames.get(view.second.id)));
+        visualParentFrames.get(view.first.id), visualParentFrames.get(view.second.id)));
     }
     const baseChildren = layoutSubtiles(anchorFrames, manualSubtileOffsets,
       subtileDrag?.moved ? { id: subtileDrag.item.id, center: subtileDrag.center } : null);
@@ -1693,13 +1821,13 @@ if (typeof document !== 'undefined') {
     lastParentAnchorFrames = anchorFrames;
     for (const [id, center] of childPositions) {
       const { circle, rect } = peerSubtileMasks.get(id);
-      const expanded = selectedSubtiles.has(id);
-      circle.style.display = expanded ? 'none' : '';
-      rect.style.display = expanded ? '' : 'none';
+      const progress = expansionProgress(`subtile:${id}`, selectedSubtiles.has(id) ? 1 : 0, drawTime);
+      circle.style.display = progress > 0.001 ? 'none' : '';
+      rect.style.display = progress > 0.001 ? '' : 'none';
       circle.setAttribute('cx', center.x);
       circle.setAttribute('cy', center.y);
-      if (expanded) {
-        const bounds = subtileBounds(center, true);
+      if (progress > 0.001) {
+        const bounds = mixRect(subtileBounds(center), subtileBounds(center, true), progress);
         rect.setAttribute('x', bounds.x + 2);
         rect.setAttribute('y', bounds.y + 2);
         rect.setAttribute('width', bounds.width - 4);
@@ -1710,7 +1838,11 @@ if (typeof document !== 'undefined') {
       const center = childPositions.get(item.id);
       group.setAttribute('transform', `translate(${center.x} ${center.y})`);
       const expanded = selectedSubtiles.has(item.id);
-      const connection = expandedSubtileConnectionAt(parentFrames.get(item.parentId), center, expanded);
+      const progress = expansionProgress(`subtile:${item.id}`, expanded ? 1 : 0, drawTime);
+      const parentRect = visualParentFrames.get(item.parentId);
+      const connection = mixConnection(
+        expandedSubtileConnectionAt(parentRect, center),
+        expandedSubtileConnectionAt(parentRect, center, true), progress);
       line.setAttribute('d', connection.path);
       for (const [node, point] of [[parentNode, connection.start], [childNode, connection.end]]) {
         node.setAttribute('cx', point.x);
@@ -1721,7 +1853,7 @@ if (typeof document !== 'undefined') {
         ring.setAttribute('cx', receiving.x);
         ring.setAttribute('cy', receiving.y);
       }
-      const bounds = subtileBounds(center, expanded);
+      const bounds = mixRect(subtileBounds(center), subtileBounds(center, true), progress);
       button.style.left = `${(bounds.x - 4 - camera.x) / camera.width * 100}%`;
       button.style.top = `${(bounds.y - 4 - camera.y) / camera.height * 100}%`;
       button.style.width = `${(bounds.width + 8) / camera.width * 100}%`;
@@ -1729,8 +1861,17 @@ if (typeof document !== 'undefined') {
       button.style.borderRadius = expanded ? '14px' : '50%';
     }
     for (const view of subtilePeerViews) {
-      placePeerView(view, subtilePeerConnectionAt(childPositions.get(view.first.id), childPositions.get(view.second.id),
-        selectedSubtiles.has(view.first.id), selectedSubtiles.has(view.second.id)));
+      const first = childPositions.get(view.first.id);
+      const second = childPositions.get(view.second.id);
+      const firstProgress = expansionProgress(`subtile:${view.first.id}`,
+        selectedSubtiles.has(view.first.id) ? 1 : 0, drawTime);
+      const secondProgress = expansionProgress(`subtile:${view.second.id}`,
+        selectedSubtiles.has(view.second.id) ? 1 : 0, drawTime);
+      const compact = mixConnection(subtilePeerConnectionAt(first, second),
+        subtilePeerConnectionAt(first, second, true), firstProgress);
+      const expanded = mixConnection(subtilePeerConnectionAt(first, second, false, true),
+        subtilePeerConnectionAt(first, second, true, true), firstProgress);
+      placePeerView(view, mixConnection(compact, expanded, secondProgress));
     }
     const fourthObstacles = [
       ...parentFrames.values(),
@@ -1763,10 +1904,16 @@ if (typeof document !== 'undefined') {
       const center = fourthPositions.get(item.id);
       const parent = childPositions.get(item.parentId);
       const expanded = selectedFourthTiles.has(item.id);
-      const bounds = fourthBounds(center, expanded);
+      const progress = expansionProgress(`fourth:${item.id}`, expanded ? 1 : 0, drawTime);
+      const parentProgress = expansionProgress(`subtile:${item.parentId}`,
+        selectedSubtiles.has(item.parentId) ? 1 : 0, drawTime);
+      const bounds = mixRect(fourthBounds(center), fourthBounds(center, true), progress);
       group.setAttribute('transform', `translate(${center.x} ${center.y})`);
-      line.setAttribute('d', fourthConnectionAt(parent, center,
-        selectedSubtiles.has(item.parentId), expanded).path);
+      const compact = mixConnection(fourthConnectionAt(parent, center),
+        fourthConnectionAt(parent, center, true), parentProgress);
+      const expandedConnection = mixConnection(fourthConnectionAt(parent, center, false, true),
+        fourthConnectionAt(parent, center, true, true), parentProgress);
+      line.setAttribute('d', mixConnection(compact, expandedConnection, progress).path);
       button.style.left = `${(bounds.x - 4 - camera.x) / camera.width * 100}%`;
       button.style.top = `${(bounds.y - 4 - camera.y) / camera.height * 100}%`;
       button.style.width = `${(bounds.width + 8) / camera.width * 100}%`;
