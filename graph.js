@@ -332,7 +332,6 @@ if (typeof document !== 'undefined') {
   const navigationOpen = document.querySelector('.navigation-open');
   const navigationPanel = document.querySelector('.navigation-panel');
   const navigationMap = navigationPanel.querySelector('.navigation-map');
-  const navigationClose = navigationPanel.querySelector('.navigation-close');
   const tooltip = document.querySelector('.tile-tooltip');
   const detailsTemplate = document.querySelector('.agent-details');
   const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1177,7 +1176,6 @@ if (typeof document !== 'undefined') {
     }
     navigationPanel.hidden = !open;
     if (!open) navigationPanel.classList.remove('is-auto-animated', 'is-auto-fading');
-    navigationClose.hidden = open && navigationOpenedAutomatically;
     navigationOpen.setAttribute('aria-expanded', String(open));
     navigationOpen.setAttribute('aria-label', open ? '네비게이션 닫기' : '네비게이션 열기');
     if (open) {
@@ -1227,11 +1225,9 @@ if (typeof document !== 'undefined') {
     navigationFadeOutTimer = null;
     navigationOpenedAutomatically = false;
     navigationPanel.classList.remove('is-auto-animated', 'is-auto-fading');
-    navigationClose.hidden = false;
   }
 
   navigationOpen.addEventListener('click', event => setNavigationOpen(navigationPanel.hidden, event.detail === 0));
-  navigationClose.addEventListener('click', event => setNavigationOpen(false, event.detail === 0));
   navigationPanel.addEventListener('pointerdown', event => {
     event.stopPropagation();
     keepNavigationOpen();

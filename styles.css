@@ -1001,58 +1001,6 @@ body {
   outline-offset: -2px;
 }
 
-.navigation-close {
-  position: absolute;
-  z-index: 1;
-  top: -32px;
-  right: 0;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #f2f3f5;
-  cursor: default;
-}
-
-.navigation-close[hidden] {
-  display: none;
-}
-
-.navigation-close::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 24px;
-  height: 24px;
-  transform: translate(-50%, -50%);
-  border: 1px solid #4c4e53;
-  border-radius: 6px;
-  background: #17191c;
-}
-
-.navigation-close:hover::before {
-  background: #292c31;
-}
-
-.navigation-close svg {
-  position: relative;
-  width: 13px;
-  height: 13px;
-}
-
-.navigation-close:focus-visible {
-  outline: none;
-}
-
-.navigation-close:focus-visible::before {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
 .help-dialog {
   position: fixed;
   width: min(420px, calc(100vw - 32px));
@@ -1129,7 +1077,6 @@ body {
   outline-offset: 3px;
 }
 
-.companion-reopen[hidden],
 .companion-character[hidden] {
   display: none;
 }
@@ -1156,15 +1103,13 @@ body {
   touch-action: none;
   filter: drop-shadow(0 0 8px rgba(208, 240, 255, 0.48))
     drop-shadow(0 0 24px rgba(208, 240, 255, 0.22));
-  animation: companion-float 3.6s ease-in-out infinite;
+  animation:
+    companion-drift-x 7.6s ease-in-out -3.8s infinite alternate,
+    companion-bob-y 5.3s ease-in-out -1.325s infinite alternate;
 }
 
 .companion-character[data-dragging="true"] .companion-figure {
   cursor: grabbing;
-  animation-play-state: paused;
-}
-
-.companion-character[data-dragging="true"] .companion-close {
   animation-play-state: paused;
 }
 
@@ -1182,58 +1127,15 @@ body {
   50% { filter: brightness(1.12) drop-shadow(0 0 24px rgba(208, 240, 255, 0.28)); }
 }
 
-.companion-close {
-  position: absolute;
-  z-index: 1;
-  top: -28px;
-  right: -18px;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #f2f3f5;
-  cursor: default;
-  animation: companion-float 3.6s ease-in-out infinite;
+/* 서로 다른 주기의 가로·세로 흔들림이 부드러운 곡선 경로를 만듭니다. */
+@keyframes companion-drift-x {
+  from { translate: -16px 0; }
+  to { translate: 16px 0; }
 }
 
-.companion-close::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 24px;
-  height: 24px;
-  transform: translate(-50%, -50%);
-  border: 1px solid #4c4e53;
-  border-radius: 6px;
-  background: #17191c;
-}
-
-.companion-close:hover::before {
-  background: #292c31;
-}
-
-.companion-close svg {
-  position: relative;
-  width: 13px;
-  height: 13px;
-}
-
-.companion-close:focus-visible {
-  outline: none;
-}
-
-.companion-close:focus-visible::before {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
-@keyframes companion-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+@keyframes companion-bob-y {
+  from { transform: translateY(-14px); }
+  to { transform: translateY(14px); }
 }
 
 .companion-figure > svg {
@@ -1622,9 +1524,6 @@ body {
     width: 48px;
   }
 
-  .companion-close {
-    right: -10px;
-  }
 }
 
 /* 연결된 타일마다 동일한 1초 주기로 밝아졌다 돌아옵니다. */
@@ -1666,7 +1565,6 @@ body {
   }
 
   .companion-figure,
-  .companion-close,
   .companion-figure > svg {
     animation: none;
   }

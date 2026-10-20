@@ -176,7 +176,7 @@
           <path d="M3 3v5h5" />
         </svg>
       </button>
-      <button class="companion-reopen" type="button" aria-label="캐릭터 다시 보이기" title="캐릭터 보기">
+      <button class="companion-reopen" type="button" aria-label="캐릭터 보기" aria-pressed="false" title="캐릭터 보기">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="7" width="16" height="13" rx="5" />
           <path d="M12 7V4m-2 0h4" />
@@ -198,19 +198,9 @@
       </button>
       <section class="navigation-panel" id="navigation-panel" aria-label="스웜 네비게이션" hidden>
         <canvas class="navigation-map" tabindex="0" aria-label="스웜 축소 지도. 클릭하거나 드래그하여 화면 이동, 방향키로 조금씩 이동"></canvas>
-        <button class="navigation-close" type="button" aria-label="네비게이션 닫기">
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
-            <path d="M5 5l10 10M15 5L5 15" />
-          </svg>
-        </button>
       </section>
       <div class="companion-character" hidden>
         <button class="companion-figure" type="button" aria-label="AI 챗봇 열기 또는 캐릭터 이동" aria-controls="companion-chat" aria-expanded="false"></button>
-        <button class="companion-close" type="button" aria-label="캐릭터 닫기">
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
-            <path d="M5 5l10 10M15 5L5 15" />
-          </svg>
-        </button>
       </div>
       <section class="companion-chat" id="companion-chat" role="dialog" aria-label="AI 슈퍼바이저 챗봇" hidden>
         <header class="companion-chat__header">
@@ -262,7 +252,7 @@
       </section>
       <section>
         <h3>캐릭터</h3>
-        <p>처음에는 숨겨져 있습니다. 오른쪽 아래 ‘캐릭터 보기’로 표시하거나 빈 곳을 더블클릭해 해당 위치로 부를 수 있습니다. 캐릭터를 클릭하면 챗봇이 열리고, 드래그하면 위치가 바뀝니다. × 버튼으로 닫을 수 있습니다.</p>
+        <p>처음에는 숨겨져 있습니다. 오른쪽 아래 캐릭터 버튼으로 표시하고, 같은 버튼을 다시 누르면 숨겨집니다. 빈 곳을 더블클릭하면 그 위치로 부를 수 있습니다. 캐릭터는 부드럽게 떠다니며, 클릭하면 챗봇이 열리고 드래그하면 위치가 바뀝니다. 캐릭터를 숨기면 채팅창도 닫힙니다.</p>
       </section>
       <section>
         <h3>화면 제어</h3>
@@ -270,7 +260,7 @@
       </section>
       <section>
         <h3>네비게이션</h3>
-        <p>오른쪽 아래 네비게이션 버튼으로 축소 지도를 엽니다. 지도에서 클릭하거나 드래그하면 화면이 이동합니다. 화면을 확대·축소하거나 이동할 때도 잠시 자동으로 나타납니다.</p>
+        <p>오른쪽 아래 네비게이션 버튼으로 축소 지도를 열고, 같은 버튼을 다시 누르면 닫습니다. 지도에서 클릭하거나 드래그하면 화면이 이동합니다. 화면을 확대·축소하거나 이동할 때는 잠시 자동으로 나타납니다.</p>
       </section>
     </dialog>
     <script>

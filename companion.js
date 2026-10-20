@@ -2,7 +2,6 @@ import { attachCompanionChat } from './companion-chat.js';
 
 const host = document.querySelector('.companion-character');
 const figure = host.querySelector('.companion-figure');
-const closeButton = host.querySelector('.companion-close');
 const reopenButton = document.querySelector('.companion-reopen');
 const canvas = document.querySelector('.graph-canvas');
 const graph = canvas.querySelector('.graph-resource');
@@ -37,6 +36,21 @@ function stopSummon() {
   summonFrame = 0;
 }
 
+function setCharacterVisible(visible) {
+  if (visible === !host.hidden) return;
+  stopSummon();
+  if (!visible) chat.close();
+  host.hidden = !visible;
+  if (visible && movedByUser) {
+    const rect = host.getBoundingClientRect();
+    placeCharacter(rect.left, rect.top);
+  }
+  reopenButton.setAttribute('aria-pressed', String(visible));
+  reopenButton.setAttribute('aria-label', visible ? '캐릭터 숨기기' : '캐릭터 보기');
+  reopenButton.title = visible ? '캐릭터 숨기기' : '캐릭터 보기';
+  restartAnimation();
+}
+
 function summonEase(progress) {
   // 이동 경로의 마지막 10%에 이를 때까지 가속하고, 그 후 감속해 멈춥니다.
   const brakeFrom = 0.9;
@@ -47,11 +61,7 @@ function summonEase(progress) {
 
 function summonCharacter(clientX, clientY) {
   stopSummon();
-  if (host.hidden) {
-    host.hidden = false;
-    reopenButton.hidden = true;
-    restartAnimation();
-  }
+  if (host.hidden) setCharacterVisible(true);
 
   const start = host.getBoundingClientRect();
   const maxX = Math.max(0, innerWidth - host.offsetWidth - 12);
@@ -161,24 +171,8 @@ window.addEventListener('resize', () => {
   placeCharacter(rect.left, rect.top);
 });
 
-closeButton.addEventListener('click', () => {
-  stopSummon();
-  chat.close();
-  host.hidden = true;
-  reopenButton.hidden = false;
-  restartAnimation();
-  reopenButton.focus();
-});
-
 reopenButton.addEventListener('click', () => {
-  host.hidden = false;
-  if (movedByUser) {
-    const rect = host.getBoundingClientRect();
-    placeCharacter(rect.left, rect.top);
-  }
-  reopenButton.hidden = true;
-  restartAnimation();
-  figure.focus();
+  setCharacterVisible(host.hidden);
 });
 
 const response = await fetch('./assets/companion.svg');
