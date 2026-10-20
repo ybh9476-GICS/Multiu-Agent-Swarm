@@ -175,13 +175,18 @@ export function layoutSubtiles(parentFrames, manualOffsets = new Map(), dragged 
     if (!parent) continue;
     const basis = radialBasis(parent, parentFrames.get('supervisor'), item.side);
     const offset = manualOffsets.get(item.id);
-    const radius = item.count >= 5 ? 190 : item.count === 4 ? 184 : 174;
+    const baseRadius = item.count >= 5 ? 190 : item.count === 4 ? 184 : 174;
     const spread = (item.count >= 5 ? 27 : item.count === 4 ? 36 : 48) * Math.PI / 180;
     const angle = (item.index - (item.count - 1) / 2) * spread;
     const outward = {
       x: basis.radial.x * Math.cos(angle) + basis.tangent.x * Math.sin(angle),
       y: basis.radial.y * Math.cos(angle) + basis.tangent.y * Math.sin(angle),
     };
+    const parentEdge = Math.min(
+      outward.x ? (parent.width / 2 - 1) / Math.abs(outward.x) : Infinity,
+      outward.y ? (parent.height / 2 - 1) / Math.abs(outward.y) : Infinity,
+    );
+    const radius = baseRadius + Math.max(0, baseRadius - parentEdge - subtileRadius) * 0.3;
     const desired = dragged?.id === item.id ? dragged.center : offset
       ? { x: basis.origin.x + offset.x, y: basis.origin.y + offset.y }
       : { x: basis.origin.x + outward.x * radius, y: basis.origin.y + outward.y * radius };

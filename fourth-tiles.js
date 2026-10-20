@@ -2,7 +2,7 @@ import { subtileBounds, subtileRadius } from './subtiles.js';
 
 export const fourthRadius = 13;
 export const fourthDetailSize = { width: 88, height: 40 };
-export const fourthConnectionGap = 112;
+export const fourthConnectionGap = 145.6;
 
 function stableSample(parentId) {
   let hash = 2166136261;

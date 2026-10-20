@@ -1,15 +1,16 @@
 import { advanceSubtileStatusState, createSubtileStatusState, expandedSubtileConnectionAt, layoutSubtiles, peerMockFlow, settleSubtilePositions, submenuIconPaths, submenuItems, subtileBounds, subtileDetailSize, subtileFloatAt, subtileMockFlow, subtilePeerConnectionAt, subtileRadius } from './subtiles.js';
 import { createFourthLevelItems, fourthBounds, fourthConnectionAt, fourthDetailSize, fourthFloatAt, fourthRadius, layoutFourthLevelItems, settleFourthLevelPositions } from './fourth-tiles.js';
 
-// Tile artwork follows OpenPencil: Page 1 / Section 2; positions form the three-level mock.
+// Tile artwork follows OpenPencil: Page 1 / Section 2; positions form the four-level mock.
+// Compact supervisor-to-agent edge gaps are 30% longer than the original layout.
 export const agents = [
   { id: 'supervisor', x: 657, y: 571, amplitude: 5, period: 9.2, phase: 0.4 },
-  { id: 'quality', x: 555, y: 375, amplitude: 10, period: 7.6, phase: 0.0 },
-  { id: 'equipment', x: 450, y: 607, amplitude: 8, period: 8.8, phase: 1.8 },
-  { id: 'safety', x: 555, y: 795, amplitude: 11, period: 8.1, phase: 3.5 },
-  { id: 'production', x: 830, y: 375, amplitude: 9, period: 8.4, phase: 2.6 },
-  { id: 'energy', x: 935, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
-  { id: 'logistics', x: 830, y: 795, amplitude: 8, period: 9.6, phase: 5.6 },
+  { id: 'quality', x: 533.33, y: 338.57, amplitude: 10, period: 7.6, phase: 0.0 },
+  { id: 'equipment', x: 408.3, y: 607, amplitude: 8, period: 8.8, phase: 1.8 },
+  { id: 'safety', x: 537.13, y: 819.35, amplitude: 11, period: 8.1, phase: 3.5 },
+  { id: 'production', x: 851.5, y: 338.59, amplitude: 9, period: 8.4, phase: 2.6 },
+  { id: 'energy', x: 976.4, y: 607, amplitude: 10, period: 7.9, phase: 4.7 },
+  { id: 'logistics', x: 847.71, y: 819.3, amplitude: 8, period: 9.6, phase: 5.6 },
 ];
 
 export function sameLevelPairs(items, parentOf) {
@@ -440,7 +441,8 @@ if (typeof document !== 'undefined') {
     const viewport = controls.getBoundingClientRect();
     const width = viewport.width || window.innerWidth || 1;
     const height = viewport.height || window.innerHeight || 1;
-    const zoom = Math.max(1, Math.min(1.32, height / width / (baseHeight / baseWidth))) * 0.9;
+    // Keep the wider outer rings visible when the graph first opens.
+    const zoom = Math.max(1, Math.min(1.32, height / width / (baseHeight / baseWidth))) * 0.72;
     const viewWidth = Math.max(baseWidth / zoom, 1200 * width / height);
     const viewHeight = viewWidth * height / width;
     return {
